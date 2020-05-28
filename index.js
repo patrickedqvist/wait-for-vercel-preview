@@ -1,38 +1,25 @@
 const core = require("@actions/core");
 const github = require("@actions/github");
 
-const checkDeploymentStatus = async ({ token, owner, repo, deployment_id }, MAX_TIMEOUT) => {
+const waitForUrl = async (url, MAX_TIMEOUT) => {
     const iterations = MAX_TIMEOUT / 2;
     for (let i = 0; i < iterations; i++) {
         try {
-
-            const octokit = new github.GitHub(token);
-
-            const statuses = await octokit.repos.listDeploymentStatuses({
-                owner,
-                repo,
-                deployment_id,
-            })
-
-            if ( statuses.data[0].state === 'success' ) {
-                return statuses.data[0];
-            } else if (result.data[0].state !== 'success') {
-                throw Error('deployment status was not equal to `success`')
-            }
-
+            await axios.get(url);
+            return;
         } catch (e) {
-            console.log(e);
-            await new Promise((r) => setTimeout(r, 2000));
+            console.log("Url unavailable, retrying...");
+            await new Promise(r => setTimeout(r, 2000));
         }
     }
-    core.setFailed(`Timeout reached: Unable to get deployment status`);
+    core.setFailed(`Timeout reached: Unable to connect to ${url}`);
 };
 
 const run = async () => {
     try {        
 
         // Inputs
-        const GITHUB_TOKEN = core.getInput('token')
+        const GITHUB_TOKEN = core.getInput('token', { required: true })
         const MAX_TIMEOUT = Number(core.getInput("max_timeout")) || 60;        
 
         // Fail if we have don't have a github token
@@ -43,35 +30,52 @@ const run = async () => {
         const octokit = new github.GitHub(GITHUB_TOKEN);
         
         const context = github.context;
-
         const owner = context.repo.owner
-        const repo = context.repo.repo                
+        const repo = context.repo.repo 
 
-        const deployments = await octokit.repos.listDeployments({
-            ref,
+        // Get pull requests associated with commit
+        const prs = await octokit.repos.listPullRequestsAssociatedWithCommit({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            commit_sha: context.sha,
+        });
+
+        // Get latest PR
+        const pr = prs.data.length > 0 && prs.data[0];
+
+        if ( !pr ) {
+            core.setFailed('No pull request with sha ' + context.sha + ' was found')
+        }
+
+        // Get information about the pull request
+        const currentPR = await octokit.pulls.get({
             owner,
             repo,
-            environment: 'Preview'
+            pull_number: pr.number
         })
 
-        const latestDeployment = deployments.data[0]
+        // Get Ref from pull request
+        const prREF = currentPR.data.head.ref
 
-        console.log('wait-for-vercel-preview latestDeployment »', latestDeployment)
-
-        const status = await checkDeploymentStatus({
-            token: GITHUB_TOKEN,
+        // List statuses for ref
+        const statuses = await octokit.repos.listStatusesForRef({
             owner,
             repo,
-            deployment_id: latestDeployment.id
-        }, MAX_TIMEOUT)
+            ref: prREF
+        })
 
-        console.log('wait-for-vercel-preview latestDeployment »', latestDeployment)
+        // Get latest status
+        const status = statuses.data.length > 0 && statuses.data[0];
 
-        if (status.state === 'success') {
-            core.setOutput('url', status.target_url)
-        } else {
-            core.setFailed('Unable to get deployment status')
-        }
+        // Get target url
+        const targetUrl = status.target_url
+
+        // Set output
+        core.setOutput('url', targetUrl);
+
+        // Wait for url to respond with a sucess
+        console.log(`Waiting for a status code 200 from: ${url}`);
+        await waitForUrl(url, MAX_TIMEOUT);
     
     } catch (error) {
         core.setFailed(error.message);

@@ -19,6 +19,7 @@
   "homepage": "https://github.com/patrickedqvist/wait-for-vercel-preview#readme",
   "dependencies": {
     "@actions/core": "^1.2.4",
-    "@actions/github": "^2.2.0"
+    "@actions/github": "^2.2.0",
+    "axios": "^0.19.2"
   }
 }

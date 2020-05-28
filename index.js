@@ -45,29 +45,25 @@ const run = async () => {
         const context = github.context;
 
         const owner = context.repo.owner
-        const repo = context.repo.repo
-        const sha = context.sha
-        const ref = context.ref
-
-        console.log('wait-for-vercel-preview owner »', owner)
-        console.log('wait-for-vercel-preview repo »', repo)
-        console.log('wait-for-vercel-preview sha »', sha)
-        console.log('wait-for-vercel-preview ref »', ref)
+        const repo = context.repo.repo                
 
         const deployments = await octokit.repos.listDeployments({
             owner,
-            repo
+            repo,
+            environment: 'Preview'
         })
-        
-        console.log('wait-for-vercel-preview deployments »', deployments.data)
 
         const latestDeployment = deployments.data[0]
+
+        console.log('wait-for-vercel-preview latestDeployment »', latestDeployment)
 
         const status = await checkDeploymentStatus({
             owner,
             repo,
             deployment_id: latestDeployment.id
-        })
+        }, MAX_TIMEOUT)
+
+        console.log('wait-for-vercel-preview latestDeployment »', latestDeployment)
 
         if (status.state === 'success') {
             core.setOutput('url', status.target_url)

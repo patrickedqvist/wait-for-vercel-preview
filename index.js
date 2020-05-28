@@ -16,6 +16,33 @@ const waitForUrl = async (url, MAX_TIMEOUT) => {
     core.setFailed(`Timeout reached: Unable to connect to ${url}`);
 };
 
+const waitForStatus = async ({ token, owner, repo, deployment_id }, MAX_TIMEOUT) => {
+
+    const octokit = new github.GitHub(token);
+    const iterations = MAX_TIMEOUT / 2;
+
+    for (let i = 0; i < iterations; i++) {
+        try {
+            const result = await octokit.repos.listDeploymentStatuses({
+                owner,
+                repo,
+                deployment_id: deployment.id
+            })
+
+            if (result.data.length > 0 && result.data[0] && result.data[0].state === 'success' ) {
+                return result.data[0]
+            } else {
+                throw Error()
+            }
+            
+        } catch (e) {
+            console.log("Deployment unavailable or not successful, retrying...");
+            await new Promise(r => setTimeout(r, 2000));
+        }
+    }
+    core.setFailed(`Timeout reached: Unable to wait for an deployment to be successful`);
+}
+
 const run = async () => {
     try {
 
@@ -52,7 +79,6 @@ const run = async () => {
 
         // Get Ref from pull request        
         const prSHA = currentPR.data.head.sha
-        console.log('sha from current pull request »', prSHA)
 
         // Get deployments associated with the pull request
         const deployments = await octokit.repos.listDeployments({
@@ -63,8 +89,6 @@ const run = async () => {
 
         const deployment = deployments.data.length > 0 && deployments.data[0];
 
-        console.log('deployment »', deployment)
-
         // List statuses for ref
         const statuses = await octokit.repos.listDeploymentStatuses({
             owner,
@@ -72,12 +96,12 @@ const run = async () => {
             deployment_id: deployment.id
         })
 
-        console.log('statuses »', statuses)
-
-        // Get latest status
-        const status = statuses.data.length > 0 && statuses.data[0];
-
-        console.log('latest status »', status)
+        const status = await waitForStatus({ 
+            owner,
+            repo,
+            deployment_id: deployment.id,
+            token: GITHUB_TOKEN
+        }, MAX_TIMEOUT)
 
         // Get target url
         const targetUrl = status.target_url

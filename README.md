@@ -2,6 +2,8 @@
 
 Do you have other Github actions (Lighthouse, Cypress, etc) that depend on the Vercel Preview URL? This action will wait until the url is available before running the next task.
 
+Please note that this action is supposed to be run on the `pull_request` event. 
+
 ## Inputs
 
 ### `token` (Required)

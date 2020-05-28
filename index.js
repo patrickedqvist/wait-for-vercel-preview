@@ -48,6 +48,7 @@ const run = async () => {
         const repo = context.repo.repo                
 
         const deployments = await octokit.repos.listDeployments({
+            ref,
             owner,
             repo,
             environment: 'Preview'

@@ -1,25 +1,24 @@
 const core = require("@actions/core");
 const github = require("@actions/github");
 
-const checkDeploymentStatus = async ({ token, owner, repo, deployment_id, status_id }, MAX_TIMEOUT) => {
+const checkDeploymentStatus = async ({ token, owner, repo, deployment_id }, MAX_TIMEOUT) => {
     const iterations = MAX_TIMEOUT / 2;
     for (let i = 0; i < iterations; i++) {
         try {
 
             const octokit = new github.GitHub(token);
 
-            const result = await octokit.repos.getDeploymentStatus({
+            const statuses = await octokit.repos.listDeploymentStatuses({
                 owner,
                 repo,
                 deployment_id,
-                status_id,
             })
 
-            if ( result.data.state === 'success' ) {
-                return result;
-            } else if (result.data.state !== 'success') {
+            if ( statuses.data[0].state === 'success' ) {
+                return statuses.data[0];
+            } else if (result.data[0].state !== 'success') {
                 throw Error('deployment status was not equal to `success`')
-            }    
+            }
 
         } catch (e) {
             console.log(e);
@@ -64,25 +63,14 @@ const run = async () => {
 
         const latestDeployment = deployments.data[0]
 
-        const statuses = await octokit.repos.listDeploymentStatuses({
+        const status = await checkDeploymentStatus({
             owner,
             repo,
-            deployment_id: latestDeployment.id,
+            deployment_id: latestDeployment.id
         })
 
-        console.log('wait-for-vercel-preview statuses »', statuses.data)
-
-        // Wait for a successful deployment
-        const deployment = await checkDeploymentStatus({
-            token: GITHUB_TOKEN,
-            owner: owner,
-            repo: repo,
-            deployment_id: latestDeployment.id,
-            status_id: statuses.data[0].id
-        }, MAX_TIMEOUT)
-
-        if (deployment.data.state === 'success') {
-            core.setOutput('url', deployment.data.target_url)
+        if (status.state === 'success') {
+            core.setOutput('url', status.target_url)
         } else {
             core.setFailed('Unable to get deployment status')
         }

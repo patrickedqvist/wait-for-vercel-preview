@@ -19,8 +19,7 @@ const run = async () => {
     try {        
 
         // Inputs
-        const GITHUB_TOKEN = core.getInput('token', { required: true })
-        let PR_NUMBER = core.getInput('pr_number', { required: true })
+        const GITHUB_TOKEN = core.getInput('token', { required: true })        
         const MAX_TIMEOUT = Number(core.getInput("max_timeout")) || 60;        
 
         // Fail if we have don't have a github token
@@ -28,16 +27,14 @@ const run = async () => {
             core.setFailed('Required field `token` was not provided')
         }
 
-        if (!PR_NUMBER) {
-            console.log('No PR_NUMBER was provided trying with: ' + github.context.issue.number)
-            PR_NUMBER = github.context.issue.number
-        }
-
         const octokit = new github.GitHub(GITHUB_TOKEN);
         
         const context = github.context;
         const owner = context.repo.owner
         const repo = context.repo.repo 
+        const PR_NUMBER = github.context.issue.number
+        
+        console.log('Running with context', github.context);
 
         // Get information about the pull request
         const currentPR = await octokit.pulls.get({

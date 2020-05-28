@@ -1,5 +1,6 @@
 const core = require("@actions/core");
 const github = require("@actions/github");
+const axios = require('axios');
 
 const waitForUrl = async (url, MAX_TIMEOUT) => {
     const iterations = MAX_TIMEOUT / 2;
@@ -16,25 +17,25 @@ const waitForUrl = async (url, MAX_TIMEOUT) => {
 };
 
 const run = async () => {
-    try {        
+    try {
 
         // Inputs
-        const GITHUB_TOKEN = core.getInput('token', { required: true })        
-        const MAX_TIMEOUT = Number(core.getInput("max_timeout")) || 60;        
+        const GITHUB_TOKEN = core.getInput('token', { required: true })
+        const MAX_TIMEOUT = Number(core.getInput("max_timeout")) || 60;
 
         // Fail if we have don't have a github token
-        if (!GITHUB_TOKEN ) {
+        if (!GITHUB_TOKEN) {
             core.setFailed('Required field `token` was not provided')
         }
 
         const octokit = new github.GitHub(GITHUB_TOKEN);
-        
+
         const context = github.context;
         const owner = context.repo.owner
-        const repo = context.repo.repo 
+        const repo = context.repo.repo
         const PR_NUMBER = github.context.payload.pull_request.number
-        
-        if ( !PR_NUMBER ) {
+
+        if (!PR_NUMBER) {
             core.setFailed('No pull request number was found')
         }
 
@@ -45,20 +46,29 @@ const run = async () => {
             pull_number: PR_NUMBER
         })
 
-        if ( currentPR.status !== 200 ) {
+        if (currentPR.status !== 200) {
             core.setFailed('Could not get information about the current pull request')
-        } 
+        }
 
-        // Get Ref from pull request
-        const prREF = currentPR.data.head.ref
+        // Get Ref from pull request        
+        const prSHA = currentPR.data.head.sha
+        console.log('sha from current pull request »', prSHA)
 
-        console.log('ref from current pull request »', prREF)
-
-        // List statuses for ref
-        const statuses = await octokit.repos.listStatusesForRef({
+        const deployments = await octokit.repos.listDeployments({
             owner,
             repo,
-            ref: prREF
+            sha: prSHA
+        })
+
+        const deployment = deployments.data.length > 0 && deployments.data[0];
+
+        console.log('deployment »', deployment)
+
+        // List statuses for ref
+        const statuses = await octokit.repos.listDeploymentStatuses({
+            owner,
+            repo,
+            deployment_id: deployment.id
         })
 
         console.log('statuses »', statuses)
@@ -77,9 +87,9 @@ const run = async () => {
         core.setOutput('url', targetUrl);
 
         // Wait for url to respond with a sucess
-        console.log(`Waiting for a status code 200 from: ${url}`);
+        console.log(`Waiting for a status code 200 from: ${targetUrl}`);
         await waitForUrl(targetUrl, MAX_TIMEOUT);
-    
+
     } catch (error) {
         core.setFailed(error.message);
     }

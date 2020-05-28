@@ -57,7 +57,8 @@ const run = async () => {
 
         const deployments = await octokit.repos.listDeployments({
             owner,
-            sha
+            sha,
+            repo
         })
         
         console.log('wait-for-vercel-preview deployments »', deployments.data)

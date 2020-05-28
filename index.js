@@ -41,13 +41,34 @@ const run = async () => {
             core.setFailed('Required field `token` was not provided')
         }
 
+        const octokit = new github.GitHub(GITHUB_TOKEN);
+
+        const owner = github.context.repo.owner
+        const repo = github.context.repo
+        const sha = github.context.sha
+        const ref = github.context.ref
+
+        const deployments = await octokit.repos.listDeployments({
+            owner,
+            sha,
+            ref
+        })
+        
+        const latestDeployment = deployments.data[0]
+
+        const statuses = await octokit.repos.listDeploymentStatuses({
+            owner,
+            repo,
+            deployment_id: latestDeployment.id,
+        })
+
         // Wait for a successful deployment
         const deployment = await checkDeploymentStatus({
             token: GITHUB_TOKEN,
-            owner: github.owner,
-            repo: github.repository,
-            deployment_id: github.deployment_id,
-            status_id: github.status_id,
+            owner: owner,
+            repo: repo,
+            deployment_id: latestDeployment.id,
+            status_id: statuses.data[0].id
         }, MAX_TIMEOUT)
 
         if (deployment.data.state === 'success') {

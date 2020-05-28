@@ -32,9 +32,11 @@ const run = async () => {
         const context = github.context;
         const owner = context.repo.owner
         const repo = context.repo.repo 
-        const PR_NUMBER = github.context.issue.number
+        const PR_NUMBER = github.context.payload.pull_request.number
         
-        console.log('Running with context', github.context);
+        if ( !PR_NUMBER ) {
+            core.setFailed('No pull request number was found')
+        }
 
         // Get information about the pull request
         const currentPR = await octokit.pulls.get({
@@ -43,8 +45,14 @@ const run = async () => {
             pull_number: PR_NUMBER
         })
 
+        if ( currentPR.status !== 200 ) {
+            core.setFailed('Could not get information about the current pull request')
+        } 
+
         // Get Ref from pull request
         const prREF = currentPR.data.head.ref
+
+        console.log('ref from current pull request »', prREF)
 
         // List statuses for ref
         const statuses = await octokit.repos.listStatusesForRef({
@@ -53,18 +61,24 @@ const run = async () => {
             ref: prREF
         })
 
+        console.log('statuses »', statuses)
+
         // Get latest status
         const status = statuses.data.length > 0 && statuses.data[0];
 
+        console.log('latest status »', status)
+
         // Get target url
         const targetUrl = status.target_url
+
+        console.log('target url »', targetUrl)
 
         // Set output
         core.setOutput('url', targetUrl);
 
         // Wait for url to respond with a sucess
         console.log(`Waiting for a status code 200 from: ${url}`);
-        await waitForUrl(url, MAX_TIMEOUT);
+        await waitForUrl(targetUrl, MAX_TIMEOUT);
     
     } catch (error) {
         core.setFailed(error.message);

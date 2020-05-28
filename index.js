@@ -1,5 +1,5 @@
-const core = require("@actions/core");
-const github = require("@actions/github");
+import * as core from '@actions/core'
+import * as github from '@actions/github'
 
 const checkDeploymentStatus = async ({ token, owner, repo, deployment_id, status_id }, MAX_TIMEOUT) => {
     const iterations = MAX_TIMEOUT / 2;
@@ -42,21 +42,22 @@ const run = async () => {
         }
 
         const octokit = new github.GitHub(GITHUB_TOKEN);
+        
+        const context = github.context;
 
-        const owner = github.context.repo.owner
-        const repo = github.context.repo.repo
-        const sha = github.context.sha
-        const ref = github.context.ref
+        const owner = context.repo.owner
+        const repo = context.repo.repo
+        const sha = context.sha
+        const ref = context.ref
 
         console.log('wait-for-vercel-preview owner »', owner)
-        console.log('wait-for-vercel-preview repo »', owner)
-        console.log('wait-for-vercel-preview sha »', owner)
-        console.log('wait-for-vercel-preview ref »', owner)
+        console.log('wait-for-vercel-preview repo »', repo)
+        console.log('wait-for-vercel-preview sha »', sha)
+        console.log('wait-for-vercel-preview ref »', ref)
 
         const deployments = await octokit.repos.listDeployments({
             owner,
-            sha,
-            ref
+            sha
         })
         
         console.log('wait-for-vercel-preview deployments »', deployments.data)

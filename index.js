@@ -48,12 +48,19 @@ const run = async () => {
         const sha = github.context.sha
         const ref = github.context.ref
 
+        console.log('wait-for-vercel-preview owner »', owner)
+        console.log('wait-for-vercel-preview repo »', owner)
+        console.log('wait-for-vercel-preview sha »', owner)
+        console.log('wait-for-vercel-preview ref »', owner)
+
         const deployments = await octokit.repos.listDeployments({
             owner,
             sha,
             ref
         })
         
+        console.log('wait-for-vercel-preview deployments »', deployments.data)
+
         const latestDeployment = deployments.data[0]
 
         const statuses = await octokit.repos.listDeploymentStatuses({
@@ -61,6 +68,8 @@ const run = async () => {
             repo,
             deployment_id: latestDeployment.id,
         })
+
+        console.log('wait-for-vercel-preview statuses »', statuses.data)
 
         // Wait for a successful deployment
         const deployment = await checkDeploymentStatus({

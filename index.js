@@ -57,7 +57,7 @@ const run = async () => {
 
         const deployments = await octokit.repos.listDeployments({
             owner,
-            sha,
+            ref,
             repo
         })
         

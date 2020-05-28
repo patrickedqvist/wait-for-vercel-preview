@@ -1,0 +1,25 @@
+{
+  "name": "wait-for-vercel-preview",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/patrickedqvist/wait-for-vercel-preview.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/patrickedqvist/wait-for-vercel-preview/issues"
+  },
+  "homepage": "https://github.com/patrickedqvist/wait-for-vercel-preview#readme",
+  "dependencies": {
+    "@actions/core": "^1.2.4",
+    "@actions/github": "^2.2.0",
+    "axios": "^0.19.2"
+  }
+}

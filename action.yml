@@ -1,0 +1,18 @@
+name: 'Wait for Vercel Preview'
+description: "Wait for Vercel Deploy Preview to complete"
+branding:
+  icon: "clock"
+  color: "blue"
+inputs:
+  token:
+    description: "The Github Secret"
+    required: true
+  max_timeout:
+    description: "The max time to run the action"
+    required: false
+outputs:
+  url:
+    description: "The fully qualified deploy preview URL"
+runs:
+  using: "node12"
+  main: "index.js"

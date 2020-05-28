@@ -1,5 +1,5 @@
-import * as core from '@actions/core'
-import * as github from '@actions/github'
+const core = require("@actions/core");
+const github = require("@actions/github");
 
 const checkDeploymentStatus = async ({ token, owner, repo, deployment_id, status_id }, MAX_TIMEOUT) => {
     const iterations = MAX_TIMEOUT / 2;

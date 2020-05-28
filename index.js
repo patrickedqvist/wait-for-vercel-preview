@@ -58,7 +58,7 @@ const run = async () => {
         console.log('wait-for-vercel-preview latestDeployment »', latestDeployment)
 
         const status = await checkDeploymentStatus({
-            token,
+            token: GITHUB_TOKEN,
             owner,
             repo,
             deployment_id: latestDeployment.id

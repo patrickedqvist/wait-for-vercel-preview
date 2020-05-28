@@ -44,7 +44,7 @@ const run = async () => {
         const octokit = new github.GitHub(GITHUB_TOKEN);
 
         const owner = github.context.repo.owner
-        const repo = github.context.repo
+        const repo = github.context.repo.repo
         const sha = github.context.sha
         const ref = github.context.ref
 

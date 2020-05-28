@@ -20,11 +20,17 @@ const run = async () => {
 
         // Inputs
         const GITHUB_TOKEN = core.getInput('token', { required: true })
+        let PR_NUMBER = core.getInput('pr_number', { required: true })
         const MAX_TIMEOUT = Number(core.getInput("max_timeout")) || 60;        
 
         // Fail if we have don't have a github token
         if (!GITHUB_TOKEN ) {
             core.setFailed('Required field `token` was not provided')
+        }
+
+        if (!PR_NUMBER) {
+            console.log('No PR_NUMBER was provided trying with: ' + github.context.issue.number)
+            PR_NUMBER = github.context.issue.number
         }
 
         const octokit = new github.GitHub(GITHUB_TOKEN);
@@ -33,25 +39,11 @@ const run = async () => {
         const owner = context.repo.owner
         const repo = context.repo.repo 
 
-        // Get pull requests associated with commit
-        const prs = await octokit.repos.listPullRequestsAssociatedWithCommit({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            commit_sha: context.sha,
-        });
-
-        // Get latest PR
-        const pr = prs.data.length > 0 && prs.data[0];
-
-        if ( !pr ) {
-            core.setFailed('No pull request with sha ' + context.sha + ' was found')
-        }
-
         // Get information about the pull request
         const currentPR = await octokit.pulls.get({
             owner,
             repo,
-            pull_number: pr.number
+            pull_number: PR_NUMBER
         })
 
         // Get Ref from pull request

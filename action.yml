@@ -7,6 +7,9 @@ inputs:
   token:
     description: "The Github Secret"
     required: true
+  pr_number:
+    description: "The current pull request number `${{ github.event.number }}`"
+    required: true
   max_timeout:
     description: "The max time to run the action"
     required: false

@@ -54,6 +54,7 @@ const run = async () => {
         const prSHA = currentPR.data.head.sha
         console.log('sha from current pull request »', prSHA)
 
+        // Get deployments associated with the pull request
         const deployments = await octokit.repos.listDeployments({
             owner,
             repo,

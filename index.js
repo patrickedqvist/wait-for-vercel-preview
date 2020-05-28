@@ -23,14 +23,20 @@ const waitForStatus = async ({ token, owner, repo, deployment_id }, MAX_TIMEOUT)
 
     for (let i = 0; i < iterations; i++) {
         try {
-            const result = await octokit.repos.listDeploymentStatuses({
+            const statuses = await octokit.repos.listDeploymentStatuses({
                 owner,
                 repo,
-                deployment_id: deployment.id
+                deployment_id
             })
 
-            if (result.data.length > 0 && result.data[0] && result.data[0].state === 'success' ) {
-                return result.data[0]
+            const status = statuses.data.length > 0 && statuses.data[0];
+
+            if ( !status ) {
+                throw Error()
+            } else if ( status && status.state !== 'success')
+                throw Error()
+            if (status && status.state === 'success' ) {
+                return status
             } else {
                 throw Error()
             }
@@ -88,13 +94,6 @@ const run = async () => {
         })
 
         const deployment = deployments.data.length > 0 && deployments.data[0];
-
-        // List statuses for ref
-        const statuses = await octokit.repos.listDeploymentStatuses({
-            owner,
-            repo,
-            deployment_id: deployment.id
-        })
 
         const status = await waitForStatus({ 
             owner,

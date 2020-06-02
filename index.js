@@ -32,17 +32,18 @@ const waitForStatus = async ({ token, owner, repo, deployment_id }, MAX_TIMEOUT)
             const status = statuses.data.length > 0 && statuses.data[0];
 
             if ( !status ) {
-                throw Error()
+                throw Error('No status was available')
             } else if ( status && status.state !== 'success')
-                throw Error()
+                throw Error('No status with state "success" was available')
             if (status && status.state === 'success' ) {
                 return status
             } else {
-                throw Error()
+                throw Error('Unknown status error')
             }
             
         } catch (e) {
             console.log("Deployment unavailable or not successful, retrying...");
+            console.log(e)
             await new Promise(r => setTimeout(r, 2000));
         }
     }

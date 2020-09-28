@@ -32,4 +32,7 @@ steps:
     with:
       token: ${{ secrets.GITHUB_TOKEN }}
       max_timeout: 60
+  # access preview url
+  - run: echo ${{steps.waitFor200.outputs.url}}  
+   
 ```

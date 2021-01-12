@@ -20,6 +20,6 @@
   "dependencies": {
     "@actions/core": "^1.2.4",
     "@actions/github": "^2.2.0",
-    "axios": "^0.19.2"
+    "axios": "^0.21.1"
   }
 }

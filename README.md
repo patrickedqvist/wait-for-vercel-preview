@@ -10,6 +10,10 @@ Please note that this action is supposed to be run on the `pull_request` event.
 
 The github secret `${{ secrets.GITHUB_TOKEN }}`
 
+### `environment`
+
+Optional — The name of the environment that was deployed to (e.g., staging or production)
+
 ### `max_timeout`
 
 Optional — The amount of time to spend waiting on Vercel. Defaults to `60` seconds

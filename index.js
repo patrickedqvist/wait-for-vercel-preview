@@ -55,6 +55,7 @@ const run = async () => {
 
         // Inputs
         const GITHUB_TOKEN = core.getInput('token', { required: true })
+        const ENVIRONMENT = core.getInput('environment')
         const MAX_TIMEOUT = Number(core.getInput("max_timeout")) || 60;
 
         // Fail if we have don't have a github token
@@ -91,7 +92,8 @@ const run = async () => {
         const deployments = await octokit.repos.listDeployments({
             owner,
             repo,
-            sha: prSHA
+            sha: prSHA,
+            environment: ENVIRONMENT
         })
 
         const deployment = deployments.data.length > 0 && deployments.data[0];

@@ -18,7 +18,7 @@ const waitForUrl = async (url, MAX_TIMEOUT) => {
 
 const waitForStatus = async ({ token, owner, repo, deployment_id }, MAX_TIMEOUT) => {
 
-    const octokit = new github.GitHub(token);
+    const octokit = new github.getOctokit(token);
     const iterations = MAX_TIMEOUT / 2;
 
     for (let i = 0; i < iterations; i++) {
@@ -63,7 +63,7 @@ const run = async () => {
             core.setFailed('Required field `token` was not provided')
         }
 
-        const octokit = new github.GitHub(GITHUB_TOKEN);
+        const octokit = new github.getOctokit(GITHUB_TOKEN);
 
         const context = github.context;
         const owner = context.repo.owner

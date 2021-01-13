@@ -2,7 +2,7 @@
   "name": "wait-for-vercel-preview",
   "version": "1.0.5",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "build": "ncc build",
     "test": "echo \"Error: no test specified\" && exit 1"

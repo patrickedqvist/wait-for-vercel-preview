@@ -2,7 +2,7 @@
 
 Do you have other Github actions (Lighthouse, Cypress, etc) that depend on the Vercel Preview URL? This action will wait until the url is available before running the next task.
 
-Please note that this action is supposed to be run on the `pull_request` event. 
+Please note that this action is supposed to be run on the `pull_request` event.
 
 ## Inputs
 
@@ -17,6 +17,10 @@ Optional — The name of the environment that was deployed to (e.g., staging or 
 ### `max_timeout`
 
 Optional — The amount of time to spend waiting on Vercel. Defaults to `60` seconds
+
+### `allow_inactive`
+
+Optional - Check for the most recent inactive deployment (previously deployed preview) associated with the pull request. Defaults to `false`.
 
 ## Outputs
 
@@ -37,6 +41,6 @@ steps:
       token: ${{ secrets.GITHUB_TOKEN }}
       max_timeout: 60
   # access preview url
-  - run: echo ${{steps.waitFor200.outputs.url}}  
-   
+  - run: echo ${{steps.waitFor200.outputs.url}}
+
 ```

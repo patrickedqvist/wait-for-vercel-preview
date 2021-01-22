@@ -16,7 +16,7 @@ const waitForUrl = async (url, MAX_TIMEOUT) => {
     core.setFailed(`Timeout reached: Unable to connect to ${url}`);
 };
 
-const waitForStatus = async ({ token, owner, repo, deployment_id }, MAX_TIMEOUT) => {
+const waitForStatus = async ({ token, owner, repo, deployment_id }, MAX_TIMEOUT, ALLOW_INACTIVE) => {
 
     const octokit = new github.getOctokit(token);
     const iterations = MAX_TIMEOUT / 2;
@@ -33,14 +33,22 @@ const waitForStatus = async ({ token, owner, repo, deployment_id }, MAX_TIMEOUT)
 
             if ( !status ) {
                 throw Error('No status was available')
-            } else if ( status && status.state !== 'success')
+            }
+
+            if ( status && ALLOW_INACTIVE === true && status.state === 'inactive') {
+              return status
+            }
+
+            if ( status && status.state !== 'success') {
                 throw Error('No status with state "success" was available')
+            }
+
             if (status && status.state === 'success' ) {
                 return status
-            } else {
-                throw Error('Unknown status error')
             }
-            
+
+            throw Error('Unknown status error')
+
         } catch (e) {
             console.log("Deployment unavailable or not successful, retrying...");
             console.log(e)
@@ -57,6 +65,7 @@ const run = async () => {
         const GITHUB_TOKEN = core.getInput('token', { required: true })
         const ENVIRONMENT = core.getInput('environment')
         const MAX_TIMEOUT = Number(core.getInput("max_timeout")) || 60;
+        const ALLOW_INACTIVE = Boolean(core.getInput("allow_inactive")) || false;
 
         // Fail if we have don't have a github token
         if (!GITHUB_TOKEN) {
@@ -85,7 +94,7 @@ const run = async () => {
             core.setFailed('Could not get information about the current pull request')
         }
 
-        // Get Ref from pull request        
+        // Get Ref from pull request
         const prSHA = currentPR.data.head.sha
 
         // Get deployments associated with the pull request
@@ -98,12 +107,12 @@ const run = async () => {
 
         const deployment = deployments.data.length > 0 && deployments.data[0];
 
-        const status = await waitForStatus({ 
+        const status = await waitForStatus({
             owner,
             repo,
             deployment_id: deployment.id,
             token: GITHUB_TOKEN
-        }, MAX_TIMEOUT)
+        }, MAX_TIMEOUT, ALLOW_INACTIVE)
 
         // Get target url
         const targetUrl = status.target_url

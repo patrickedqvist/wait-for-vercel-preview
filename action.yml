@@ -13,6 +13,9 @@ inputs:
   environment:
     description: "The name of the environment that was deployed to (e.g., staging or production)"
     required: false
+  allow_inactive:
+    description: "Also check for most recent inactive deployment (previously deployed preview) associated with the pull request"
+    required: false
 outputs:
   url:
     description: "The fully qualified deploy preview URL"

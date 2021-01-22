@@ -20,7 +20,8 @@ Optional — The amount of time to spend waiting on Vercel. Defaults to `60` sec
 
 ### `allow_inactive`
 
-Optional - Check for the most recent inactive deployment (previously deployed preview) associated with the pull request. Defaults to `false`.
+Optional - Use the most recent inactive deployment (previously deployed preview) associated with the pull request if
+ no new deployment is available. Defaults to `false`.
 
 ## Outputs
 

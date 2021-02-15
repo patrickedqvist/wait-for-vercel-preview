@@ -35,13 +35,13 @@ Basic Usage
 
 ```yaml
 steps:
-  - name: Waiting for 200 from the Vercel Preview
+  - name: Waiting for Vercel Preview
     uses: patrickedqvist/wait-for-vercel-preview@master
-    id: waitFor200
+    id: waitForPreview
     with:
       token: ${{ secrets.GITHUB_TOKEN }}
-      max_timeout: 60
+      max_timeout: 300
   # access preview url
-  - run: echo ${{steps.waitFor200.outputs.url}}
+  - run: echo ${{steps.waitForPreview.outputs.url}}
 
 ```

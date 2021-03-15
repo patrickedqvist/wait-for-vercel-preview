@@ -16,7 +16,15 @@ Optional — The name of the environment that was deployed to (e.g., staging or 
 
 ### `max_timeout`
 
-Optional — The amount of time to spend waiting on Vercel. Defaults to `60` seconds
+Optional — The amount of time  in seconds to spend waiting for this action to complete. When this time runs out, the action is automatically failed. It is strongly recommended that this is set to 3x the average deployment time. Defaults to `60` seconds.
+
+### `vercel_polling_interval`
+
+Optional — The polling period for Vercel's preview link. Defaults to `20` seconds.
+
+### `github_polling_interval`
+
+Optional — The polling period for checking on deployments and deployment status from Github. It is strongly recommended that this is set to ~ 1/10th of the average deployment time. Defaults to `20` seconds.
 
 ### `allow_inactive`
 

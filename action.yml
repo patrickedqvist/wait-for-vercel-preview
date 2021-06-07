@@ -16,6 +16,10 @@ inputs:
   allow_inactive:
     description: "Use the most recent inactive deployment (previously deployed preview) associated with the pull request if no new deployment is available."
     required: false
+  check_interval:
+    description: "How often (in seconds) should we make the HTTP request checking to see if the deployment is available?"
+    default: '2'
+    required: false
 outputs:
   url:
     description: "The fully qualified deploy preview URL"

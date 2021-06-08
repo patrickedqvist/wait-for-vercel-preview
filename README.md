@@ -23,6 +23,10 @@ Optional — The amount of time to spend waiting on Vercel. Defaults to `60` sec
 Optional - Use the most recent inactive deployment (previously deployed preview) associated with the pull request if
  no new deployment is available. Defaults to `false`.
 
+ ### `check_interval`
+
+ Optional - How often (in seconds) should we make the HTTP request checking to see if the deployment is available? Defaults to `2` seconds.
+
 ## Outputs
 
 ### `url`
@@ -36,7 +40,7 @@ Basic Usage
 ```yaml
 steps:
   - name: Waiting for 200 from the Vercel Preview
-    uses: patrickedqvist/wait-for-vercel-preview@master
+    uses: patrickedqvist/wait-for-vercel-preview@1.1.0
     id: waitFor200
     with:
       token: ${{ secrets.GITHUB_TOKEN }}

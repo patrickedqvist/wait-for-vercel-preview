@@ -119,7 +119,7 @@ const run = async () => {
             owner,
             repo,
             deployment_id: deployment.id,
-            token: GITHUB_TOKEN
+            token: GITHUB_TOKEN,
             maxTimeout: MAX_TIMEOUT,
             allowInactive: ALLOW_INACTIVE,
             checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,

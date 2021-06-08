@@ -2,24 +2,31 @@ const core = require("@actions/core");
 const github = require("@actions/github");
 const axios = require('axios');
 
-const waitForUrl = async (url, MAX_TIMEOUT) => {
-    const iterations = MAX_TIMEOUT / 2;
+const waitForUrl = async ({ url, maxTimeout, checkIntervalInMilliseconds }) => {
+    const iterations = maxTimeout / (checkIntervalInMilliseconds / 1000);
     for (let i = 0; i < iterations; i++) {
         try {
             await axios.get(url);
             return;
         } catch (e) {
             console.log("Url unavailable, retrying...");
-            await new Promise(r => setTimeout(r, 2000));
+            await new Promise(r => setTimeout(r, checkIntervalInMilliseconds));
         }
     }
     core.setFailed(`Timeout reached: Unable to connect to ${url}`);
 };
 
-const waitForStatus = async ({ token, owner, repo, deployment_id }, MAX_TIMEOUT, ALLOW_INACTIVE) => {
-
+const waitForStatus = async ({
+    token,
+    owner,
+    repo,
+    deployment_id,
+    maxTimeout,
+    allowInactive,
+    checkIntervalInMilliseconds,
+}) => {
     const octokit = new github.getOctokit(token);
-    const iterations = MAX_TIMEOUT / 2;
+    const iterations = maxTimeout / (checkIntervalInMilliseconds / 1000);
 
     for (let i = 0; i < iterations; i++) {
         try {
@@ -35,7 +42,7 @@ const waitForStatus = async ({ token, owner, repo, deployment_id }, MAX_TIMEOUT,
                 throw Error('No status was available')
             }
 
-            if ( status && ALLOW_INACTIVE === true && status.state === 'inactive') {
+            if ( status && allowInactive === true && status.state === 'inactive') {
               return status
             }
 
@@ -52,7 +59,7 @@ const waitForStatus = async ({ token, owner, repo, deployment_id }, MAX_TIMEOUT,
         } catch (e) {
             console.log("Deployment unavailable or not successful, retrying...");
             console.log(e)
-            await new Promise(r => setTimeout(r, 2000));
+            await new Promise(r => setTimeout(r, checkIntervalInMilliseconds));
         }
     }
     core.setFailed(`Timeout reached: Unable to wait for an deployment to be successful`);
@@ -66,6 +73,7 @@ const run = async () => {
         const ENVIRONMENT = core.getInput('environment')
         const MAX_TIMEOUT = Number(core.getInput("max_timeout")) || 60;
         const ALLOW_INACTIVE = Boolean(core.getInput("allow_inactive")) || false;
+        const CHECK_INTERVAL_IN_MS = (Number(core.getInput('check_interval')) || 2) * 1000;
 
         // Fail if we have don't have a github token
         if (!GITHUB_TOKEN) {
@@ -112,7 +120,10 @@ const run = async () => {
             repo,
             deployment_id: deployment.id,
             token: GITHUB_TOKEN
-        }, MAX_TIMEOUT, ALLOW_INACTIVE)
+            maxTimeout: MAX_TIMEOUT,
+            allowInactive: ALLOW_INACTIVE,
+            checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,
+        })
 
         // Get target url
         const targetUrl = status.target_url
@@ -124,7 +135,7 @@ const run = async () => {
 
         // Wait for url to respond with a sucess
         console.log(`Waiting for a status code 200 from: ${targetUrl}`);
-        await waitForUrl(targetUrl, MAX_TIMEOUT);
+        await waitForUrl({ url: targetUrl, maxTimeout: MAX_TIMEOUT, checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS });
 
     } catch (error) {
         core.setFailed(error.message);

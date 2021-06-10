@@ -30,7 +30,7 @@ const waitForStatus = async ({
 
     for (let i = 0; i < iterations; i++) {
         try {
-            const statuses = await octokit.repos.listDeploymentStatuses({
+            const statuses = await octokit.rest.repos.listDeploymentStatuses({
                 owner,
                 repo,
                 deployment_id
@@ -92,7 +92,7 @@ const run = async () => {
         }
 
         // Get information about the pull request
-        const currentPR = await octokit.pulls.get({
+        const currentPR = await octokit.rest.pulls.get({
             owner,
             repo,
             pull_number: PR_NUMBER
@@ -106,7 +106,7 @@ const run = async () => {
         const prSHA = currentPR.data.head.sha
 
         // Get deployments associated with the pull request
-        const deployments = await octokit.repos.listDeployments({
+        const deployments = await octokit.rest.repos.listDeployments({
             owner,
             repo,
             sha: prSHA,

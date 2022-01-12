@@ -57,7 +57,7 @@ const getPassword = async ({ url, vercelPassword }) => {
     _vercel_password: vercelPassword,
   });
 
-  const setCookieHeader = response.headers['Set-Cookie'];
+  const setCookieHeader = response.headers['set-cookie'];
 
   if (!setCookieHeader) {
     throw new Error('no vercel JWT in response');

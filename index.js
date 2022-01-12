@@ -104,7 +104,7 @@ const waitForStatus = async ({
       const status = statuses.data.length > 0 && statuses.data[0];
 
       if (!status) {
-        throw StatusError('No status was available');
+        throw new StatusError('No status was available');
       }
 
       if (status && allowInactive === true && status.state === 'inactive') {
@@ -112,14 +112,14 @@ const waitForStatus = async ({
       }
 
       if (status && status.state !== 'success') {
-        throw StatusError('No status with state "success" was available');
+        throw new StatusError('No status with state "success" was available');
       }
 
       if (status && status.state === 'success') {
         return status;
       }
 
-      throw StatusError('Unknown status error');
+      throw new StatusError('Unknown status error');
     } catch (e) {
       console.log('Deployment unavailable or not successful, retrying...');
       if (e instanceof StatusError) {

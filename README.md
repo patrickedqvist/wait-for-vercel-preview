@@ -21,11 +21,15 @@ Optional — The amount of time to spend waiting on Vercel. Defaults to `60` sec
 ### `allow_inactive`
 
 Optional - Use the most recent inactive deployment (previously deployed preview) associated with the pull request if
- no new deployment is available. Defaults to `false`.
+no new deployment is available. Defaults to `false`.
 
- ### `check_interval`
+### `check_interval`
 
- Optional - How often (in seconds) should we make the HTTP request checking to see if the deployment is available? Defaults to `2` seconds.
+Optional - How often (in seconds) should we make the HTTP request checking to see if the deployment is available? Defaults to `2` seconds.
+
+### `vercel_password`
+
+Optional - The [password](https://vercel.com/docs/concepts/projects/overview#password-protection) for the deployment
 
 ## Outputs
 
@@ -47,5 +51,4 @@ steps:
       max_timeout: 60
   # access preview url
   - run: echo ${{steps.waitFor200.outputs.url}}
-
 ```

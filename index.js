@@ -13,7 +13,6 @@ const waitForUrl = async ({
   for (let i = 0; i < iterations; i++) {
     try {
       if (vercelPassword) {
-        // https://vercel.com/docs/errors#errors/bypassing-password-protection-programmatically
         const vercelJwtCookie = await getPassword({
           url,
           vercelPassword,
@@ -49,6 +48,11 @@ const waitForUrl = async ({
   core.setFailed(`Timeout reached: Unable to connect to ${url}`);
 };
 
+/**
+ * See https://vercel.com/docs/errors#errors/bypassing-password-protection-programmatically
+ * @param {{url: string; vercelPassword: string }} options vercel password options
+ * @returns {string}
+ */
 const getPassword = async ({ url, vercelPassword }) => {
   const response = await axios.post(url, {
     _vercel_password: vercelPassword,

@@ -31,12 +31,10 @@ const waitForUrl = async ({
     } catch (e) {
       // https://axios-http.com/docs/handling_errors
       if (e.response) {
-        console.log(
-          `Url ${url} responded with ${e.response.status}, retrying...`
-        );
+        console.log(`GET ${e.response.status} ${url}, retrying...`);
       } else if (e.request) {
         console.log(
-          `Url ${url} error. A request was made, but no response was received`
+          `GET ${url} error. A request was made, but no response was received`
         );
       } else {
         console.log(e);
@@ -54,6 +52,7 @@ const waitForUrl = async ({
  * @returns {string}
  */
 const getPassword = async ({ url, vercelPassword }) => {
+  console.log('Requesting Vercel JWT...');
   const response = await axios.post(url, {
     _vercel_password: vercelPassword,
   });
@@ -70,9 +69,14 @@ const getPassword = async ({ url, vercelPassword }) => {
     (cookie) => cookie.name === '_vercel_jwt'
   );
 
-  if (!vercelJwtCookie) {
+  if (!vercelJwtCookie || !vercelJwtCookie.value) {
     throw new Error('no vercel JWT in response');
   }
+
+  console.log(
+    'Received vercel JWT',
+    `${vercelJwtCookie.value.substring(0, 10)}*****`
+  );
 
   return vercelJwtCookie.value;
 };
@@ -100,7 +104,7 @@ const waitForStatus = async ({
       const status = statuses.data.length > 0 && statuses.data[0];
 
       if (!status) {
-        throw Error('No status was available');
+        throw StatusError('No status was available');
       }
 
       if (status && allowInactive === true && status.state === 'inactive') {
@@ -108,17 +112,21 @@ const waitForStatus = async ({
       }
 
       if (status && status.state !== 'success') {
-        throw Error('No status with state "success" was available');
+        throw StatusError('No status with state "success" was available');
       }
 
       if (status && status.state === 'success') {
         return status;
       }
 
-      throw Error('Unknown status error');
+      throw StatusError('Unknown status error');
     } catch (e) {
       console.log('Deployment unavailable or not successful, retrying...');
-      console.log(e);
+      if (e instanceof StatusError) {
+        console.log(e.message);
+      } else {
+        console.log(e);
+      }
       await new Promise((r) => setTimeout(r, checkIntervalInMilliseconds));
     }
   }
@@ -126,6 +134,12 @@ const waitForStatus = async ({
     `Timeout reached: Unable to wait for an deployment to be successful`
   );
 };
+
+class StatusError extends Error {
+  constructor(message) {
+    super(message);
+  }
+}
 
 const run = async () => {
   try {

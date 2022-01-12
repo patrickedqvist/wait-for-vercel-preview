@@ -30,7 +30,7 @@ const waitForUrl = async ({
       return;
     } catch (e) {
       // https://axios-http.com/docs/handling_errors
-      if (error.response) {
+      if (e.response) {
         console.log(
           `Url ${url} responded with ${e.response.status}, retrying...`
         );

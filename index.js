@@ -119,8 +119,6 @@ const waitForStatus = async ({
 
       const status = statuses.data.length > 0 && statuses.data[0];
 
-      console.log(status);
-
       if (!status) {
         throw new StatusError('No status was available');
       }
@@ -216,9 +214,16 @@ const run = async () => {
       environment: ENVIRONMENT,
     });
 
-    console.log(deployments.data);
+    const deployment =
+      deployments.data.length > 0 &&
+      deployments.data.find((deployment) => {
+        return deployment.owner.login === 'vercel[bot]';
+      });
 
-    const deployment = deployments.data.length > 0 && deployments.data[0];
+    if (!deployment) {
+      core.setFailed('no vercel deployment found, exiting...');
+      return;
+    }
 
     const status = await waitForStatus({
       owner,

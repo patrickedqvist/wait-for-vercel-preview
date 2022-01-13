@@ -1,3 +1,5 @@
+// @ts-check
+// Dependencies are compiled using https://github.com/vercel/ncc
 const core = require('@actions/core');
 const github = require('@actions/github');
 const axios = require('axios');
@@ -52,7 +54,7 @@ const waitForUrl = async ({
 /**
  * See https://vercel.com/docs/errors#errors/bypassing-password-protection-programmatically
  * @param {{url: string; vercelPassword: string }} options vercel password options
- * @returns {string}
+ * @returns {Promise<string>}
  */
 const getPassword = async ({ url, vercelPassword }) => {
   console.log('requesting vercel JWT');

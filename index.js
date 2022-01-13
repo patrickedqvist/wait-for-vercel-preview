@@ -105,7 +105,9 @@ const waitForStatus = async ({
   checkIntervalInMilliseconds,
 }) => {
   const octokit = new github.getOctokit(token);
-  const iterations = maxTimeout / (checkIntervalInMilliseconds / 1000);
+  const iterations = Math.floor(
+    maxTimeout / (checkIntervalInMilliseconds / 1000)
+  );
 
   for (let i = 0; i < iterations; i++) {
     try {
@@ -135,9 +137,15 @@ const waitForStatus = async ({
 
       throw new StatusError('Unknown status error');
     } catch (e) {
-      console.log('Deployment unavailable or not successful, retrying...');
+      console.log(
+        `Deployment unavailable or not successful, retrying (attempt ${i} / ${iterations})`
+      );
       if (e instanceof StatusError) {
-        console.log(e.message);
+        if (e.message.includes('No status with state "success"')) {
+          // TODO: does anything actually need to be logged in this case?
+        } else {
+          console.log(e.message);
+        }
       } else {
         console.log(e);
       }

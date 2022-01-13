@@ -201,6 +201,7 @@ const run = async () => {
       core.setFailed(
         'Could not get information about the current pull request'
       );
+      return;
     }
 
     // Get Ref from pull request
@@ -225,6 +226,10 @@ const run = async () => {
       allowInactive: ALLOW_INACTIVE,
       checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,
     });
+
+    if (!status) {
+      return;
+    }
 
     // Get target url
     const targetUrl = status.target_url;

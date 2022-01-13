@@ -13,16 +13,18 @@ const waitForUrl = async ({
   for (let i = 0; i < iterations; i++) {
     try {
       if (vercelPassword) {
-        const vercelJwtCookie = await getPassword({
+        const jwt = await getPassword({
           url,
           vercelPassword,
         });
 
         await axios.get(url, {
           headers: {
-            Cookie: `_vercel_jwt=${vercelJwtCookie}`,
+            Cookie: `_vercel_jwt=${jwt}`,
           },
         });
+
+        core.setOutput('vercel_jwt', jwt);
         return;
       }
 
@@ -43,6 +45,7 @@ const waitForUrl = async ({
       await new Promise((r) => setTimeout(r, checkIntervalInMilliseconds));
     }
   }
+
   core.setFailed(`Timeout reached: Unable to connect to ${url}`);
 };
 
@@ -225,12 +228,14 @@ const run = async () => {
 
     // Wait for url to respond with a sucess
     console.log(`Waiting for a status code 200 from: ${targetUrl}`);
+
     await waitForUrl({
       url: targetUrl,
       maxTimeout: MAX_TIMEOUT,
       checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,
       vercelPassword: VERCEL_PASSWORD,
     });
+
     console.log('Received sucess status code');
   } catch (error) {
     core.setFailed(error.message);

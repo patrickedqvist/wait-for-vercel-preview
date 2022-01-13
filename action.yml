@@ -26,6 +26,8 @@ inputs:
 outputs:
   url:
     description: 'The fully qualified deploy preview URL'
+  vercel_jwt:
+    description: 'If the deployment is using password protection, this will be a JWT. Otherwise, outputs an empty string'
 runs:
   using: 'node12'
   main: 'index.js'

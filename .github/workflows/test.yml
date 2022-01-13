@@ -28,5 +28,10 @@ jobs:
       - name: install
         run: npm ci
 
-      - name: test
-        run: npm run test:ci
+      - uses: willcaul/jest-github-action@v1.0.0
+        if: github.actor!='dependabot[bot]'
+        with:
+          test-command: npm run test:ci:coverage
+          coverage-comment: 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

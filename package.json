@@ -10,6 +10,7 @@
   "scripts": {
     "test": "jest --watch",
     "test:ci": "jest --ci",
+    "test:ci:coverage": "jest --ci --collect-coverage  --silent",
     "build": "ncc build index.js -o dist"
   },
   "keywords": [],

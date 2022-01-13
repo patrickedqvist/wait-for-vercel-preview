@@ -117,6 +117,8 @@ const waitForStatus = async ({
         deployment_id,
       });
 
+      console.log(statuses);
+
       const status = statuses.data.length > 0 && statuses.data[0];
 
       if (!status) {

@@ -65,6 +65,10 @@ const getPassword = async ({ url, vercelPassword }) => {
       'content-type': 'application/x-www-form-urlencoded',
     },
     maxRedirects: 0,
+    validateStatus: (status) => {
+      // Vercel returns 303 with the _vercel_jwt
+      return status >= 200 && status < 307;
+    },
   });
 
   const setCookieHeader = response.headers['set-cookie'];

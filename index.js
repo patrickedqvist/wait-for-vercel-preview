@@ -201,7 +201,6 @@ const run = async () => {
       core.setFailed(
         'Could not get information about the current pull request'
       );
-      return;
     }
 
     // Get Ref from pull request
@@ -227,12 +226,15 @@ const run = async () => {
       checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,
     });
 
-    if (!status) {
-      return;
-    }
-
     // Get target url
     const targetUrl = status.target_url;
+
+    if (status && status.target_url.includes('https://github.com')) {
+      core.setFailed(
+        `error: incorrect target_url, received: ${status.target_url}`
+      );
+      return;
+    }
 
     console.log('target url »', targetUrl);
 

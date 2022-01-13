@@ -30,4 +30,4 @@ outputs:
     description: 'If the deployment is using password protection, this will be a JWT. Otherwise, outputs an empty string'
 runs:
   using: 'node12'
-  main: 'index.js'
+  main: 'dist/index.js'

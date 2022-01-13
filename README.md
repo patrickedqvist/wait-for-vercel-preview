@@ -37,6 +37,10 @@ Optional - The [password](https://vercel.com/docs/concepts/projects/overview#pas
 
 The vercel deploy preview url that was deployed.
 
+### `vercel_jwt`
+
+If accessing a password protected site, the JWT from the login event. This can be passed on to e2e tests, for instance.
+
 ## Example usage
 
 Basic Usage

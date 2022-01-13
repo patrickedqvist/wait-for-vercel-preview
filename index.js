@@ -31,10 +31,10 @@ const waitForUrl = async ({
     } catch (e) {
       // https://axios-http.com/docs/handling_errors
       if (e.response) {
-        console.log(`GET ${e.response.status} ${url}, retrying...`);
+        console.log(`GET status: ${e.response.status}, retrying...`);
       } else if (e.request) {
         console.log(
-          `GET ${url} error. A request was made, but no response was received`
+          `GET error. A request was made, but no response was received`
         );
       } else {
         console.log(e);
@@ -52,7 +52,7 @@ const waitForUrl = async ({
  * @returns {string}
  */
 const getPassword = async ({ url, vercelPassword }) => {
-  console.log('Requesting Vercel JWT...');
+  console.log('requesting vercel JWT');
 
   const data = new URLSearchParams();
   data.append('_vercel_password', vercelPassword);
@@ -87,10 +87,7 @@ const getPassword = async ({ url, vercelPassword }) => {
     throw new Error('no vercel JWT in response');
   }
 
-  console.log(
-    'Received vercel JWT',
-    `${vercelJwtCookie.value.substring(0, 10)}*****`
-  );
+  console.log('received vercel JWT');
 
   return vercelJwtCookie.value;
 };
@@ -234,6 +231,7 @@ const run = async () => {
       checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,
       vercelPassword: VERCEL_PASSWORD,
     });
+    console.log('Received sucess status code');
   } catch (error) {
     core.setFailed(error.message);
   }

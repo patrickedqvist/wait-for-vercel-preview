@@ -7,6 +7,10 @@
     "type": "git",
     "url": "git+https://github.com/patrickedqvist/wait-for-vercel-preview.git"
   },
+  "scripts": {
+    "test": "jest --watch",
+    "test:ci": "jest --ci"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -19,5 +23,11 @@
     "@actions/github": "^5.0.0",
     "axios": "^0.21.1",
     "set-cookie-parser": "^2.4.8"
+  },
+  "devDependencies": {
+    "@types/jest": "^27.4.0",
+    "deepmerge": "^4.2.2",
+    "jest": "^27.4.7",
+    "msw": "^0.36.4"
   }
 }

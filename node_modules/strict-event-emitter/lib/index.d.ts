@@ -1,1 +1,0 @@
-export { StrictEventEmitter } from './StrictEventEmitter';

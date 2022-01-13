@@ -216,6 +216,8 @@ const run = async () => {
       environment: ENVIRONMENT,
     });
 
+    console.log(deployments.data);
+
     const deployment = deployments.data.length > 0 && deployments.data[0];
 
     const status = await waitForStatus({

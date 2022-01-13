@@ -56,3 +56,20 @@ steps:
   # access preview url
   - run: echo ${{steps.waitFor200.outputs.url}}
 ```
+
+## Building
+
+The Action is bundled via [ncc](https://github.com/vercel/ncc). See [this discussion](https://github.com/actions/hello-world-javascript-action/issues/12) for more information.
+
+```sh
+npm run build
+# outputs the build to dist/index.js
+```
+
+## Tests
+
+Unit tests with [Jest](https://jestjs.io/) and [Mock Service Worker](https://mswjs.io/)
+
+```
+npm test
+```

@@ -53,8 +53,18 @@ const waitForUrl = async ({
  */
 const getPassword = async ({ url, vercelPassword }) => {
   console.log('Requesting Vercel JWT...');
-  const response = await axios.post(url, {
-    _vercel_password: vercelPassword,
+
+  const data = new URLSearchParams();
+  data.append('_vercel_password', vercelPassword);
+
+  const response = await axios({
+    url,
+    method: 'post',
+    data: data.toString(),
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    maxRedirects: 0,
   });
 
   const setCookieHeader = response.headers['set-cookie'];

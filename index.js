@@ -226,7 +226,7 @@ const run = async () => {
     // Set output
     core.setOutput('url', targetUrl);
 
-    // Wait for url to respond with a sucess
+    // Wait for url to respond with a success
     console.log(`Waiting for a status code 200 from: ${targetUrl}`);
 
     await waitForUrl({
@@ -236,7 +236,7 @@ const run = async () => {
       vercelPassword: VERCEL_PASSWORD,
     });
 
-    console.log('Received sucess status code');
+    console.log('Received success status code');
   } catch (error) {
     core.setFailed(error.message);
   }

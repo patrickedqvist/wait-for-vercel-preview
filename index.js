@@ -217,7 +217,7 @@ const run = async () => {
     const deployment =
       deployments.data.length > 0 &&
       deployments.data.find((deployment) => {
-        return deployment.owner.login === 'vercel[bot]';
+        return deployment.creator.login === 'vercel[bot]';
       });
 
     if (!deployment) {

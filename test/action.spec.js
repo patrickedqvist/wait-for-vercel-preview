@@ -6,7 +6,7 @@ const github = require('@actions/github');
 const { server, rest } = require('./support/server');
 const deepmerge = require('deepmerge');
 
-jest.setTimeout(10000);
+jest.setTimeout(20000);
 
 jest.mock('@actions/core', () => {
   return {
@@ -94,6 +94,8 @@ describe('wait for vercel preview', () => {
     test('exits if there is no Vercel deployment status found', async () => {
       setInputs({
         token: 'a-token',
+        max_timeout: 5,
+        check_interval: 1,
       });
       setGithubContext({
         payload: {
@@ -122,9 +124,47 @@ describe('wait for vercel preview', () => {
     setInputs({
       token: 'a-token',
       check_interval: 1,
+      max_timeout: 10,
     });
 
     givenValidGithubResponses();
+
+    // Simulate deployment race-condition
+    restTimes(
+      'https://api.github.com/repos/gh-user/best-repo-ever/deployments',
+      [
+        {
+          status: 200,
+          body: [
+            {
+              id: 'a1a1a1',
+              creator: {
+                login: 'a-user',
+              },
+            },
+          ],
+          times: 2,
+        },
+        {
+          status: 200,
+          body: [
+            {
+              id: 'a1a1a1',
+              creator: {
+                login: 'a-user',
+              },
+            },
+            {
+              id: 'b2b2b2',
+              creator: {
+                login: 'vercel[bot]',
+              },
+            },
+          ],
+          times: 1,
+        },
+      ]
+    );
 
     restTimes('https://my-preview.vercel.app/', [
       {
@@ -196,7 +236,7 @@ describe('wait for vercel preview', () => {
 
 /**
  *
- * @param {{token?: string, vercel_password?: string; check_interval?: number }} inputs
+ * @param {{token?: string, vercel_password?: string; check_interval?: number; max_timeout?: number; }} inputs
  */
 function setInputs(inputs = {}) {
   const spy = jest.spyOn(core, 'getInput');
@@ -209,6 +249,8 @@ function setInputs(inputs = {}) {
         return inputs.vercel_password || '';
       case 'check_interval':
         return `${inputs.check_interval || ''}`;
+      case 'max_timeout':
+        return `${inputs.max_timeout || ''}`;
       default:
         return '';
     }
@@ -280,13 +322,23 @@ function restTimes(uri, payloads) {
 
       if (count < payload.times) {
         count = count + 1;
-        return res(ctx.status(payload.status), ctx.body(payload.body));
+
+        if (typeof payload.body === 'string') {
+          return res(ctx.status(payload.status), ctx.body(payload.body));
+        }
+
+        return res(ctx.status(payload.status), ctx.json(payload.body));
       }
 
       cursor = cursor + 1;
       count = 1;
       payload = payloads[cursor];
-      return res(ctx.status(payload.status), ctx.body(payload.body));
+
+      if (typeof payload.body === 'string') {
+        return res(ctx.status(payload.status), ctx.body(payload.body));
+      }
+
+      return res(ctx.status(payload.status), ctx.json(payload.body));
     })
   );
 }

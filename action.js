@@ -5,13 +5,22 @@ const github = require('@actions/github');
 const axios = require('axios');
 const setCookieParser = require('set-cookie-parser');
 
+const calculateIterations = (maxTimeoutSec, checkIntervalInMilliseconds) =>
+  Math.floor(maxTimeoutSec / (checkIntervalInMilliseconds / 1000));
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const waitForUrl = async ({
   url,
   maxTimeout,
   checkIntervalInMilliseconds,
   vercelPassword,
 }) => {
-  const iterations = maxTimeout / (checkIntervalInMilliseconds / 1000);
+  const iterations = calculateIterations(
+    maxTimeout,
+    checkIntervalInMilliseconds
+  );
+
   for (let i = 0; i < iterations; i++) {
     try {
       if (vercelPassword) {
@@ -44,7 +53,7 @@ const waitForUrl = async ({
         console.log(e);
       }
 
-      await new Promise((r) => setTimeout(r, checkIntervalInMilliseconds));
+      await wait(checkIntervalInMilliseconds);
     }
   }
 
@@ -107,8 +116,9 @@ const waitForStatus = async ({
   checkIntervalInMilliseconds,
 }) => {
   const octokit = new github.getOctokit(token);
-  const iterations = Math.floor(
-    maxTimeout / (checkIntervalInMilliseconds / 1000)
+  const iterations = calculateIterations(
+    maxTimeout,
+    checkIntervalInMilliseconds
   );
 
   for (let i = 0; i < iterations; i++) {
@@ -140,7 +150,9 @@ const waitForStatus = async ({
       throw new StatusError('Unknown status error');
     } catch (e) {
       console.log(
-        `Deployment unavailable or not successful, retrying (attempt ${i} / ${iterations})`
+        `Deployment unavailable or not successful, retrying (attempt ${
+          i + 1
+        } / ${iterations})`
       );
       if (e instanceof StatusError) {
         if (e.message.includes('No status with state "success"')) {
@@ -151,7 +163,7 @@ const waitForStatus = async ({
       } else {
         console.log(e);
       }
-      await new Promise((r) => setTimeout(r, checkIntervalInMilliseconds));
+      await wait(checkIntervalInMilliseconds);
     }
   }
   core.setFailed(
@@ -164,6 +176,63 @@ class StatusError extends Error {
     super(message);
   }
 }
+
+/**
+ * Waits until the github API returns a deployment for
+ * a given actor.
+ *
+ * Accounts for race conditions where this action starts
+ * before the actor's action has started.
+ *
+ * @returns
+ */
+const waitForDeploymentToStart = async ({
+  octokit,
+  owner,
+  repo,
+  sha,
+  environment,
+  actorName = 'vercel[bot]',
+  maxTimeout = 20,
+  checkIntervalInMilliseconds = 2000,
+}) => {
+  const iterations = calculateIterations(
+    maxTimeout,
+    checkIntervalInMilliseconds
+  );
+
+  for (let i = 0; i < iterations; i++) {
+    try {
+      const deployments = await octokit.rest.repos.listDeployments({
+        owner,
+        repo,
+        sha,
+        environment,
+      });
+
+      const deployment =
+        deployments.data.length > 0 &&
+        deployments.data.find((deployment) => {
+          return deployment.creator.login === actorName;
+        });
+
+      if (deployment) {
+        return deployment;
+      }
+
+      throw new Error(`no ${actorName} deployment found`);
+    } catch (e) {
+      console.log(
+        `Could not find any deployments for actor ${actorName}, retrying (attempt ${
+          i + 1
+        } / ${iterations})`
+      );
+      await wait(checkIntervalInMilliseconds);
+    }
+  }
+
+  return null;
+};
 
 const run = async () => {
   try {
@@ -210,19 +279,17 @@ const run = async () => {
     // Get Ref from pull request
     const prSHA = currentPR.data.head.sha;
 
-    // Get deployments associated with the pull request
-    const deployments = await octokit.rest.repos.listDeployments({
+    // Get deployments associated with the pull request.
+    const deployment = await waitForDeploymentToStart({
+      octokit,
       owner,
       repo,
       sha: prSHA,
       environment: ENVIRONMENT,
+      actorName: 'vercel[bot]',
+      maxTimeout: MAX_TIMEOUT / 2,
+      checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,
     });
-
-    const deployment =
-      deployments.data.length > 0 &&
-      deployments.data.find((deployment) => {
-        return deployment.creator.login === 'vercel[bot]';
-      });
 
     if (!deployment) {
       core.setFailed('no vercel deployment found, exiting...');

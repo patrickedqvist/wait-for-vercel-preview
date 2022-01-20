@@ -15,6 +15,7 @@ const waitForUrl = async ({
   maxTimeout,
   checkIntervalInMilliseconds,
   vercelPassword,
+  successStatusCode,
 }) => {
   const iterations = calculateIterations(
     maxTimeout,
@@ -29,7 +30,7 @@ const waitForUrl = async ({
           vercelPassword,
         });
 
-        await axios.get(url, {
+        await axios.default.get(url, {
           headers: {
             Cookie: `_vercel_jwt=${jwt}`,
           },
@@ -39,7 +40,11 @@ const waitForUrl = async ({
         return;
       }
 
-      await axios.get(url);
+      await axios.get(url, {
+        validateStatus: (status) => {
+          return status === successStatusCode;
+        },
+      });
       return;
     } catch (e) {
       // https://axios-http.com/docs/handling_errors
@@ -244,6 +249,7 @@ const run = async () => {
     const ALLOW_INACTIVE = Boolean(core.getInput('allow_inactive')) || false;
     const CHECK_INTERVAL_IN_MS =
       (Number(core.getInput('check_interval')) || 2) * 1000;
+    const SUCCESS_STATUS_CODE = Number(core.getInput('status_code')) || 200;
 
     // Fail if we have don't have a github token
     if (!GITHUB_TOKEN) {
@@ -320,13 +326,16 @@ const run = async () => {
     core.setOutput('url', targetUrl);
 
     // Wait for url to respond with a success
-    console.log(`Waiting for a status code 200 from: ${targetUrl}`);
+    console.log(
+      `Waiting for a status code ${SUCCESS_STATUS_CODE} from: ${targetUrl}`
+    );
 
     await waitForUrl({
       url: targetUrl,
       maxTimeout: MAX_TIMEOUT,
       checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,
       vercelPassword: VERCEL_PASSWORD,
+      successStatusCode: SUCCESS_STATUS_CODE,
     });
 
     console.log('Received success status code');

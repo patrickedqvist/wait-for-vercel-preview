@@ -188,6 +188,38 @@ describe('wait for vercel preview', () => {
     );
   });
 
+  test('can wait for a specific status code', async () => {
+    setInputs({
+      token: 'a-token',
+      check_interval: 1,
+      max_timeout: 10,
+      status_code: 307,
+    });
+
+    givenValidGithubResponses();
+
+    restTimes('https://my-preview.vercel.app/', [
+      {
+        status: 404,
+        body: 'not found',
+        times: 2,
+      },
+      {
+        status: 307,
+        body: 'special status code!',
+        times: 1,
+      },
+    ]);
+
+    await run();
+
+    expect(core.setFailed).not.toBeCalled();
+    expect(core.setOutput).toBeCalledWith(
+      'url',
+      'https://my-preview.vercel.app/'
+    );
+  });
+
   test('authenticates with the provided vercel_password', async () => {
     setInputs({
       token: 'a-token',
@@ -236,7 +268,13 @@ describe('wait for vercel preview', () => {
 
 /**
  *
- * @param {{token?: string, vercel_password?: string; check_interval?: number; max_timeout?: number; }} inputs
+ * @param {{
+ *  token?: string,
+ *  vercel_password?: string;
+ *  check_interval?: number;
+ *  max_timeout?: number;
+ *  status_code?: number;
+ *  }} inputs
  */
 function setInputs(inputs = {}) {
   const spy = jest.spyOn(core, 'getInput');
@@ -251,6 +289,8 @@ function setInputs(inputs = {}) {
         return `${inputs.check_interval || ''}`;
       case 'max_timeout':
         return `${inputs.max_timeout || ''}`;
+      case 'status_code':
+        return `${inputs.status_code || ''}`;
       default:
         return '';
     }

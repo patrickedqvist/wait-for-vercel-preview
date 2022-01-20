@@ -23,6 +23,11 @@ inputs:
   vercel_password:
     description: 'Vercel password protection secret'
     required: false
+  status_code:
+    description: 'The status code to wait for'
+    default: '200'
+    required: false
+
 outputs:
   url:
     description: 'The fully qualified deploy preview URL'

@@ -59,11 +59,14 @@ const waitForUrl = async ({
     } catch (e) {
       // https://axios-http.com/docs/handling_errors
       if (e.response) {
-        console.log(`GET status: ${e.response.status}, retrying...`);
+        console.log(
+          `GET status: ${e.response.status}. Attempt ${i} of ${iterations}`
+        );
       } else if (e.request) {
         console.log(
-          `GET error. A request was made, but no response was received`
+          `GET error. A request was made, but no response was received. Attempt ${i} of ${iterations}`
         );
+        console.log(e);
       } else {
         console.log(e);
       }

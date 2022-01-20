@@ -45,6 +45,7 @@ const waitForUrl = async ({
           return status === successStatusCode;
         },
       });
+      console.log('Received success status code');
       return;
     } catch (e) {
       // https://axios-http.com/docs/handling_errors
@@ -337,8 +338,6 @@ const run = async () => {
       vercelPassword: VERCEL_PASSWORD,
       successStatusCode: SUCCESS_STATUS_CODE,
     });
-
-    console.log('Received success status code');
   } catch (error) {
     core.setFailed(error.message);
   }

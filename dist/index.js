@@ -47,6 +47,7 @@ const waitForUrl = async ({
 
       const response = await axios.get(url, {
         headers,
+        maxRedirects: 7,
         validateStatus: (status) => {
           return true;
         },

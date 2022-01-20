@@ -21,6 +21,7 @@ const waitForUrl = async ({
   maxTimeout,
   checkIntervalInMilliseconds,
   vercelPassword,
+  successStatusCode,
 }) => {
   const iterations = calculateIterations(
     maxTimeout,
@@ -29,32 +30,49 @@ const waitForUrl = async ({
 
   for (let i = 0; i < iterations; i++) {
     try {
+      let headers = {};
+
       if (vercelPassword) {
         const jwt = await getPassword({
           url,
           vercelPassword,
         });
 
-        await axios.get(url, {
-          headers: {
-            Cookie: `_vercel_jwt=${jwt}`,
-          },
-        });
+        headers = {
+          Cookie: `_vercel_jwt=${jwt}`,
+        };
 
         core.setOutput('vercel_jwt', jwt);
-        return;
       }
 
-      await axios.get(url);
+      const response = await axios.get(url, {
+        headers,
+        validateStatus: (status) => {
+          return true;
+        },
+      });
+
+      if (response.status !== successStatusCode) {
+        const error = new UnexpectedStatusError(
+          'unexpected status code',
+          response
+        );
+        throw error;
+      }
+
+      console.log('Received success status code');
       return;
     } catch (e) {
       // https://axios-http.com/docs/handling_errors
       if (e.response) {
-        console.log(`GET status: ${e.response.status}, retrying...`);
+        console.log(
+          `GET status: ${e.response.status}. Attempt ${i} of ${iterations}`
+        );
       } else if (e.request) {
         console.log(
-          `GET error. A request was made, but no response was received`
+          `GET error. A request was made, but no response was received. Attempt ${i} of ${iterations}`
         );
+        console.log(e);
       } else {
         console.log(e);
       }
@@ -65,6 +83,13 @@ const waitForUrl = async ({
 
   core.setFailed(`Timeout reached: Unable to connect to ${url}`);
 };
+
+class UnexpectedStatusError extends Error {
+  constructor(message, response) {
+    super(message);
+    this.response = response;
+  }
+}
 
 /**
  * See https://vercel.com/docs/errors#errors/bypassing-password-protection-programmatically
@@ -250,6 +275,7 @@ const run = async () => {
     const ALLOW_INACTIVE = Boolean(core.getInput('allow_inactive')) || false;
     const CHECK_INTERVAL_IN_MS =
       (Number(core.getInput('check_interval')) || 2) * 1000;
+    const SUCCESS_STATUS_CODE = Number(core.getInput('status_code')) || 200;
 
     // Fail if we have don't have a github token
     if (!GITHUB_TOKEN) {
@@ -326,16 +352,17 @@ const run = async () => {
     core.setOutput('url', targetUrl);
 
     // Wait for url to respond with a success
-    console.log(`Waiting for a status code 200 from: ${targetUrl}`);
+    console.log(
+      `Waiting for a status code ${SUCCESS_STATUS_CODE} from: ${targetUrl}`
+    );
 
     await waitForUrl({
       url: targetUrl,
       maxTimeout: MAX_TIMEOUT,
       checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,
       vercelPassword: VERCEL_PASSWORD,
+      successStatusCode: SUCCESS_STATUS_CODE,
     });
-
-    console.log('Received success status code');
   } catch (error) {
     core.setFailed(error.message);
   }

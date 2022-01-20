@@ -24,27 +24,36 @@ const waitForUrl = async ({
 
   for (let i = 0; i < iterations; i++) {
     try {
+      let headers = {};
+
       if (vercelPassword) {
         const jwt = await getPassword({
           url,
           vercelPassword,
         });
 
-        await axios.default.get(url, {
-          headers: {
-            Cookie: `_vercel_jwt=${jwt}`,
-          },
-        });
+        headers = {
+          Cookie: `_vercel_jwt=${jwt}`,
+        };
 
         core.setOutput('vercel_jwt', jwt);
-        return;
       }
 
-      await axios.get(url, {
+      const response = await axios.get(url, {
+        headers,
         validateStatus: (status) => {
-          return status === successStatusCode;
+          return true;
         },
       });
+
+      if (response.status !== successStatusCode) {
+        const error = new UnexpectedStatusError(
+          'unexpected status code',
+          response
+        );
+        throw error;
+      }
+
       console.log('Received success status code');
       return;
     } catch (e) {
@@ -65,6 +74,13 @@ const waitForUrl = async ({
 
   core.setFailed(`Timeout reached: Unable to connect to ${url}`);
 };
+
+class UnexpectedStatusError extends Error {
+  constructor(message, response) {
+    super(message);
+    this.response = response;
+  }
+}
 
 /**
  * See https://vercel.com/docs/errors#errors/bypassing-password-protection-programmatically

@@ -23,9 +23,9 @@ inputs:
   vercel_password:
     description: 'Vercel password protection secret'
     required: false
-  status_code:
-    description: 'The status code to wait for'
-    default: '200'
+  path:
+    description: 'The path to check. Defaults to the index of the domain'
+    default: '/'
     required: false
 
 outputs:

@@ -21,7 +21,7 @@ const waitForUrl = async ({
   maxTimeout,
   checkIntervalInMilliseconds,
   vercelPassword,
-  successStatusCode,
+  path,
 }) => {
   const iterations = calculateIterations(
     maxTimeout,
@@ -45,22 +45,11 @@ const waitForUrl = async ({
         core.setOutput('vercel_jwt', jwt);
       }
 
-      const response = await axios.get(url, {
+      let checkUri = new URL(path, url);
+
+      await axios.get(checkUri.toString(), {
         headers,
-        maxRedirects: 7,
-        validateStatus: (status) => {
-          return true;
-        },
       });
-
-      if (response.status !== successStatusCode) {
-        const error = new UnexpectedStatusError(
-          'unexpected status code',
-          response
-        );
-        throw error;
-      }
-
       console.log('Received success status code');
       return;
     } catch (e) {
@@ -73,7 +62,7 @@ const waitForUrl = async ({
         console.log(
           `GET error. A request was made, but no response was received. Attempt ${i} of ${iterations}`
         );
-        console.log(e);
+        console.log(e.message);
       } else {
         console.log(e);
       }
@@ -84,13 +73,6 @@ const waitForUrl = async ({
 
   core.setFailed(`Timeout reached: Unable to connect to ${url}`);
 };
-
-class UnexpectedStatusError extends Error {
-  constructor(message, response) {
-    super(message);
-    this.response = response;
-  }
-}
 
 /**
  * See https://vercel.com/docs/errors#errors/bypassing-password-protection-programmatically
@@ -274,9 +256,9 @@ const run = async () => {
     const ENVIRONMENT = core.getInput('environment');
     const MAX_TIMEOUT = Number(core.getInput('max_timeout')) || 60;
     const ALLOW_INACTIVE = Boolean(core.getInput('allow_inactive')) || false;
+    const PATH = core.getInput('path') || '/';
     const CHECK_INTERVAL_IN_MS =
       (Number(core.getInput('check_interval')) || 2) * 1000;
-    const SUCCESS_STATUS_CODE = Number(core.getInput('status_code')) || 200;
 
     // Fail if we have don't have a github token
     if (!GITHUB_TOKEN) {
@@ -353,16 +335,14 @@ const run = async () => {
     core.setOutput('url', targetUrl);
 
     // Wait for url to respond with a success
-    console.log(
-      `Waiting for a status code ${SUCCESS_STATUS_CODE} from: ${targetUrl}`
-    );
+    console.log(`Waiting for a status code 200 from: ${targetUrl}`);
 
     await waitForUrl({
       url: targetUrl,
       maxTimeout: MAX_TIMEOUT,
       checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,
       vercelPassword: VERCEL_PASSWORD,
-      successStatusCode: SUCCESS_STATUS_CODE,
+      path: PATH,
     });
   } catch (error) {
     core.setFailed(error.message);

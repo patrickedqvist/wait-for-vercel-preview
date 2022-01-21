@@ -188,25 +188,25 @@ describe('wait for vercel preview', () => {
     );
   });
 
-  test('can wait for a specific status code', async () => {
+  test('can wait for a specific path', async () => {
     setInputs({
       token: 'a-token',
       check_interval: 1,
       max_timeout: 10,
-      status_code: 307,
+      path: '/wp-admin.php',
     });
 
     givenValidGithubResponses();
 
-    restTimes('https://my-preview.vercel.app/', [
+    restTimes('https://my-preview.vercel.app/wp-admin.php', [
       {
         status: 404,
         body: 'not found',
         times: 2,
       },
       {
-        status: 307,
-        body: 'special status code!',
+        status: 200,
+        body: 'custom path!',
         times: 1,
       },
     ]);
@@ -273,7 +273,7 @@ describe('wait for vercel preview', () => {
  *  vercel_password?: string;
  *  check_interval?: number;
  *  max_timeout?: number;
- *  status_code?: number;
+ *  path?: string;
  *  }} inputs
  */
 function setInputs(inputs = {}) {
@@ -289,8 +289,8 @@ function setInputs(inputs = {}) {
         return `${inputs.check_interval || ''}`;
       case 'max_timeout':
         return `${inputs.max_timeout || ''}`;
-      case 'status_code':
-        return `${inputs.status_code || ''}`;
+      case 'path':
+        return `${inputs.path || ''}`;
       default:
         return '';
     }

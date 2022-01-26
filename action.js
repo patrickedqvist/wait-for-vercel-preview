@@ -242,6 +242,32 @@ const waitForDeploymentToStart = async ({
   return null;
 };
 
+async function getShaForPullRequest({ octokit, owner, repo, number }) {
+  const PR_NUMBER = github.context.payload.pull_request.number;
+
+  if (!PR_NUMBER) {
+    core.setFailed('No pull request number was found');
+    return;
+  }
+
+  // Get information about the pull request
+  const currentPR = await octokit.rest.pulls.get({
+    owner,
+    repo,
+    pull_number: PR_NUMBER,
+  });
+
+  if (currentPR.status !== 200) {
+    core.setFailed('Could not get information about the current pull request');
+    return;
+  }
+
+  // Get Ref from pull request
+  const prSHA = currentPR.data.head.sha;
+
+  return prSHA;
+}
+
 const run = async () => {
   try {
     // Inputs
@@ -259,47 +285,39 @@ const run = async () => {
       core.setFailed('Required field `token` was not provided');
     }
 
-    const octokit = new github.getOctokit(GITHUB_TOKEN);
+    const octokit = github.getOctokit(GITHUB_TOKEN);
 
     const context = github.context;
     const owner = context.repo.owner;
     const repo = context.repo.repo;
 
-    if (!github.context.payload.pull_request) {
-      console.log('this command only runs on pull requests, skipping...');
-      return;
+    /**
+     * @type {string}
+     */
+    let sha;
+
+    if (github.context.payload && github.context.payload.pull_request) {
+      sha = await getShaForPullRequest({
+        octokit,
+        owner,
+        repo,
+        number: github.context.payload.pull_request.number,
+      });
+    } else if (github.context.sha) {
+      sha = github.context.sha;
     }
 
-    const PR_NUMBER = github.context.payload.pull_request.number;
-
-    if (!PR_NUMBER) {
-      core.setFailed('No pull request number was found');
+    if (!sha) {
+      core.setFailed('Unable to determine SHA. Exiting...');
       return;
     }
-
-    // Get information about the pull request
-    const currentPR = await octokit.rest.pulls.get({
-      owner,
-      repo,
-      pull_number: PR_NUMBER,
-    });
-
-    if (currentPR.status !== 200) {
-      core.setFailed(
-        'Could not get information about the current pull request'
-      );
-      return;
-    }
-
-    // Get Ref from pull request
-    const prSHA = currentPR.data.head.sha;
 
     // Get deployments associated with the pull request.
     const deployment = await waitForDeploymentToStart({
       octokit,
       owner,
       repo,
-      sha: prSHA,
+      sha: sha,
       environment: ENVIRONMENT,
       actorName: 'vercel[bot]',
       maxTimeout: MAX_TIMEOUT / 2,

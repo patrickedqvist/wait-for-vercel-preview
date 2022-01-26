@@ -188,6 +188,36 @@ describe('wait for vercel preview', () => {
     );
   });
 
+  test('can find the sha from the github context', async () => {
+    setInputs({
+      token: 'a-token',
+      check_interval: 1,
+      max_timeout: 10,
+    });
+
+    setGithubContext({
+      sha: 'abcdef12345678',
+    });
+
+    givenValidGithubResponses();
+
+    restTimes('https://my-preview.vercel.app', [
+      {
+        status: 200,
+        body: 'ok!',
+        times: 1,
+      },
+    ]);
+
+    await run();
+
+    expect(core.setFailed).not.toBeCalled();
+    expect(core.setOutput).toBeCalledWith(
+      'url',
+      'https://my-preview.vercel.app/'
+    );
+  });
+
   test('can wait for a specific path', async () => {
     setInputs({
       token: 'a-token',

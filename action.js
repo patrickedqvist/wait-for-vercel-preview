@@ -264,6 +264,12 @@ const run = async () => {
     const context = github.context;
     const owner = context.repo.owner;
     const repo = context.repo.repo;
+
+    if (!github.context.payload.pull_request) {
+      console.log('this command only runs on pull requests, skipping...');
+      return;
+    }
+
     const PR_NUMBER = github.context.payload.pull_request.number;
 
     if (!PR_NUMBER) {

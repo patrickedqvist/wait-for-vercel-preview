@@ -1,28 +1,38 @@
 name: 'Wait for Vercel Preview'
-description: "Wait for Vercel Deploy Preview to complete. Requires to be run on pull_request."
+description: 'Wait for Vercel Deploy Preview to complete. Requires to be run on pull_request.'
 branding:
-  icon: "clock"
-  color: "blue"
+  icon: 'clock'
+  color: 'blue'
 inputs:
   token:
-    description: "The Github Secret"
+    description: 'The Github Secret'
     required: true
   max_timeout:
-    description: "The max time to run the action"
+    description: 'The max time to run the action'
     required: false
   environment:
-    description: "The name of the environment that was deployed to (e.g., staging or production)"
+    description: 'The name of the environment that was deployed to (e.g., staging or production)'
     required: false
   allow_inactive:
-    description: "Use the most recent inactive deployment (previously deployed preview) associated with the pull request if no new deployment is available."
+    description: 'Use the most recent inactive deployment (previously deployed preview) associated with the pull request if no new deployment is available.'
     required: false
   check_interval:
-    description: "How often (in seconds) should we make the HTTP request checking to see if the deployment is available?"
+    description: 'How often (in seconds) should we make the HTTP request checking to see if the deployment is available?'
     default: '2'
     required: false
+  vercel_password:
+    description: 'Vercel password protection secret'
+    required: false
+  path:
+    description: 'The path to check. Defaults to the index of the domain'
+    default: '/'
+    required: false
+
 outputs:
   url:
-    description: "The fully qualified deploy preview URL"
+    description: 'The fully qualified deploy preview URL'
+  vercel_jwt:
+    description: 'If the deployment is using password protection, this will be a JWT. Otherwise, outputs an empty string'
 runs:
-  using: "node12"
-  main: "index.js"
+  using: 'node12'
+  main: 'dist/index.js'

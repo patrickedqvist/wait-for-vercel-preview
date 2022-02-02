@@ -2,10 +2,16 @@
   "name": "wait-for-vercel-preview",
   "version": "1.1.1",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/patrickedqvist/wait-for-vercel-preview.git"
+  },
+  "scripts": {
+    "test": "jest --watch",
+    "test:ci": "jest --ci",
+    "test:ci:coverage": "jest --ci --collect-coverage  --silent",
+    "build": "ncc build index.js -o dist"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +23,14 @@
   "dependencies": {
     "@actions/core": "^1.4.0",
     "@actions/github": "^5.0.0",
-    "axios": "^0.21.1"
+    "@vercel/ncc": "^0.33.1",
+    "axios": "^0.21.1",
+    "set-cookie-parser": "^2.4.8"
+  },
+  "devDependencies": {
+    "@types/jest": "^27.4.0",
+    "deepmerge": "^4.2.2",
+    "jest": "^27.4.7",
+    "msw": "^0.36.4"
   }
 }

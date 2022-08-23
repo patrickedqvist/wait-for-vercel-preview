@@ -228,15 +228,22 @@ const waitForDeploymentToStart = async ({
         return deployment;
       }
 
-      throw new Error(`no ${actorName} deployment found`);
-    } catch (e) {
       console.log(
         `Could not find any deployments for actor ${actorName}, retrying (attempt ${
           i + 1
         } / ${iterations})`
       );
-      await wait(checkIntervalInMilliseconds);
+    } catch(e) {
+      console.log(
+        `Error while fetching deployments, retrying (attempt ${
+          i + 1
+        } / ${iterations})`
+      );
+
+      console.error(e)
     }
+
+    await wait(checkIntervalInMilliseconds);
   }
 
   return null;

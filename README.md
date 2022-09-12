@@ -31,6 +31,10 @@ Optional - How often (in seconds) should we make the HTTP request checking to se
 
 Optional - The [password](https://vercel.com/docs/concepts/projects/overview#password-protection) for the deployment
 
+### `path`
+
+Optional - The URL that tests should run against (eg. `path: "https://vercel.com"`).
+
 ## Outputs
 
 ### `url`

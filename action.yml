@@ -34,5 +34,5 @@ outputs:
   vercel_jwt:
     description: 'If the deployment is using password protection, this will be a JWT. Otherwise, outputs an empty string'
 runs:
-  using: 'node12'
+  using: 'node18'
   main: 'dist/index.js'

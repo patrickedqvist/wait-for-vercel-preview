@@ -1,5 +1,5 @@
 name: 'Wait for Vercel Preview'
-description: 'Wait for Vercel Deploy Preview to complete. Requires to be run on pull_request.'
+description: 'Wait for Vercel Deploy Preview to complete. Requires to be run on pull_request or push.'
 branding:
   icon: 'clock'
   color: 'blue'

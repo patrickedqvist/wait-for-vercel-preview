@@ -2,7 +2,7 @@
 
 Do you have other Github actions (Lighthouse, Cypress, etc) that depend on the Vercel Preview URL? This action will wait until the url is available before running the next task.
 
-Please note that this action is supposed to be run on the `pull_request` event.
+Please note that this action is supposed to be run on the `pull_request` or `push` events.
 
 ## Inputs
 
@@ -30,6 +30,10 @@ Optional - How often (in seconds) should we make the HTTP request checking to se
 ### `vercel_password`
 
 Optional - The [password](https://vercel.com/docs/concepts/projects/overview#password-protection) for the deployment
+
+### `path`
+
+Optional - The URL that tests should run against (eg. `path: "https://vercel.com"`).
 
 ## Outputs
 

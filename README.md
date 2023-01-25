@@ -52,7 +52,7 @@ Basic Usage
 ```yaml
 steps:
   - name: Waiting for 200 from the Vercel Preview
-    uses: patrickedqvist/wait-for-vercel-preview@v1.2.0
+    uses: patrickedqvist/wait-for-vercel-preview@v1.3.0
     id: waitFor200
     with:
       token: ${{ secrets.GITHUB_TOKEN }}

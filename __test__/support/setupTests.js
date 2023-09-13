@@ -1,5 +1,4 @@
 const { server } = require('./server.js');
-
 // Establish API mocking before all tests.
 beforeAll(() => server.listen());
 

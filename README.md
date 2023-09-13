@@ -1,6 +1,6 @@
 # Wait for Vercel Preview — A GitHub Action ⏱
 
-Do you have other Github actions (Lighthouse, Cypress, etc) that depend on the Vercel Preview URL? This action will wait until the url is available before running the next task.
+Do you have other Github actions (Lighthouse, Cypress, etc) that depend on the Vercel Preview URL? This action will waitSpec until the url is available before running the next task.
 
 Please note that this action is supposed to be run on the `pull_request` or `push` events.
 
@@ -52,7 +52,7 @@ Basic Usage
 ```yaml
 steps:
   - name: Waiting for 200 from the Vercel Preview
-    uses: patrickedqvist/wait-for-vercel-preview@v1.3.1
+    uses: patrickedqvist/waitSpec-for-vercel-preview@v1.3.1
     id: waitFor200
     with:
       token: ${{ secrets.GITHUB_TOKEN }}

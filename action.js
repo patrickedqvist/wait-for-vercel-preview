@@ -1,189 +1,10 @@
-// @ts-check
-// Dependencies are compiled using https://github.com/vercel/ncc
 const core = require('@actions/core');
 const github = require('@actions/github');
-const axios = require('axios');
-const setCookieParser = require('set-cookie-parser');
 
-const calculateIterations = (maxTimeoutSec, checkIntervalInMilliseconds) =>
-  Math.floor(maxTimeoutSec / (checkIntervalInMilliseconds / 1000));
-
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const waitForUrl = async ({
-  url,
-  maxTimeout,
-  checkIntervalInMilliseconds,
-  vercelPassword,
-  path,
-}) => {
-  const iterations = calculateIterations(
-    maxTimeout,
-    checkIntervalInMilliseconds
-  );
-
-  for (let i = 0; i < iterations; i++) {
-    try {
-      let headers = {};
-
-      if (vercelPassword) {
-        const jwt = await getPassword({
-          url,
-          vercelPassword,
-        });
-
-        headers = {
-          Cookie: `_vercel_jwt=${jwt}`,
-        };
-
-        core.setOutput('vercel_jwt', jwt);
-      }
-
-      let checkUri = new URL(path, url);
-
-      await axios.get(checkUri.toString(), {
-        headers,
-      });
-      console.log('Received success status code');
-      return;
-    } catch (e) {
-      // https://axios-http.com/docs/handling_errors
-      if (e.response) {
-        console.log(
-          `GET status: ${e.response.status}. Attempt ${i} of ${iterations}`
-        );
-      } else if (e.request) {
-        console.log(
-          `GET error. A request was made, but no response was received. Attempt ${i} of ${iterations}`
-        );
-        console.log(e.message);
-      } else {
-        console.log(e);
-      }
-
-      await wait(checkIntervalInMilliseconds);
-    }
-  }
-
-  core.setFailed(`Timeout reached: Unable to connect to ${url}`);
-};
-
-/**
- * See https://vercel.com/docs/errors#errors/bypassing-password-protection-programmatically
- * @param {{url: string; vercelPassword: string }} options vercel password options
- * @returns {Promise<string>}
- */
-const getPassword = async ({ url, vercelPassword }) => {
-  console.log('requesting vercel JWT');
-
-  const data = new URLSearchParams();
-  data.append('_vercel_password', vercelPassword);
-
-  const response = await axios({
-    url,
-    method: 'post',
-    data: data.toString(),
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-    },
-    maxRedirects: 0,
-    validateStatus: (status) => {
-      // Vercel returns 303 with the _vercel_jwt
-      return status >= 200 && status < 307;
-    },
-  });
-
-  const setCookieHeader = response.headers['set-cookie'];
-
-  if (!setCookieHeader) {
-    throw new Error('no vercel JWT in response');
-  }
-
-  const cookies = setCookieParser(setCookieHeader);
-
-  const vercelJwtCookie = cookies.find(
-    (cookie) => cookie.name === '_vercel_jwt'
-  );
-
-  if (!vercelJwtCookie || !vercelJwtCookie.value) {
-    throw new Error('no vercel JWT in response');
-  }
-
-  console.log('received vercel JWT');
-
-  return vercelJwtCookie.value;
-};
-
-const waitForStatus = async ({
-  token,
-  owner,
-  repo,
-  deployment_id,
-  maxTimeout,
-  allowInactive,
-  checkIntervalInMilliseconds,
-}) => {
-  const octokit = new github.getOctokit(token);
-  const iterations = calculateIterations(
-    maxTimeout,
-    checkIntervalInMilliseconds
-  );
-
-  for (let i = 0; i < iterations; i++) {
-    try {
-      const statuses = await octokit.rest.repos.listDeploymentStatuses({
-        owner,
-        repo,
-        deployment_id,
-      });
-
-      const status = statuses.data.length > 0 && statuses.data[0];
-
-      if (!status) {
-        throw new StatusError('No status was available');
-      }
-
-      if (status && allowInactive === true && status.state === 'inactive') {
-        return status;
-      }
-
-      if (status && status.state !== 'success') {
-        throw new StatusError('No status with state "success" was available');
-      }
-
-      if (status && status.state === 'success') {
-        return status;
-      }
-
-      throw new StatusError('Unknown status error');
-    } catch (e) {
-      console.log(
-        `Deployment unavailable or not successful, retrying (attempt ${
-          i + 1
-        } / ${iterations})`
-      );
-      if (e instanceof StatusError) {
-        if (e.message.includes('No status with state "success"')) {
-          // TODO: does anything actually need to be logged in this case?
-        } else {
-          console.log(e.message);
-        }
-      } else {
-        console.log(e);
-      }
-      await wait(checkIntervalInMilliseconds);
-    }
-  }
-  core.setFailed(
-    `Timeout reached: Unable to wait for an deployment to be successful`
-  );
-};
-
-class StatusError extends Error {
-  constructor(message) {
-    super(message);
-  }
-}
+const calculateIterations = require('./lib/calculate-iterations');
+const wait = require('./lib/wait');
+const healthCheck = require('./lib/health-check');
+const waitForDeploymentStatus = require('./lib/wait-for-deployment-status');
 
 /**
  * Waits until the github API returns a deployment for
@@ -233,14 +54,14 @@ const waitForDeploymentToStart = async ({
           i + 1
         } / ${iterations})`
       );
-    } catch(e) {
+    } catch (e) {
       console.log(
         `Error while fetching deployments, retrying (attempt ${
           i + 1
         } / ${iterations})`
       );
 
-      console.error(e)
+      console.error(e);
     }
 
     await wait(checkIntervalInMilliseconds);
@@ -250,7 +71,7 @@ const waitForDeploymentToStart = async ({
 };
 
 async function getShaForPullRequest({ octokit, owner, repo, number }) {
-  const PR_NUMBER = github.context.payload.pull_request.number;
+  const PR_NUMBER = number;
 
   if (!PR_NUMBER) {
     core.setFailed('No pull request number was found');
@@ -269,51 +90,96 @@ async function getShaForPullRequest({ octokit, owner, repo, number }) {
     return;
   }
 
-  // Get Ref from pull request
-  const prSHA = currentPR.data.head.sha;
-
-  return prSHA;
+  return currentPR.data.head.sha;
 }
 
 const run = async () => {
   try {
-    // Inputs
-    const GITHUB_TOKEN = core.getInput('token', { required: true });
-    const VERCEL_PASSWORD = core.getInput('vercel_password');
-    const ENVIRONMENT = core.getInput('environment');
-    const MAX_TIMEOUT = Number(core.getInput('max_timeout')) || 60;
-    const ALLOW_INACTIVE = Boolean(core.getInput('allow_inactive')) || false;
-    const PATH = core.getInput('path') || '/';
-    const CHECK_INTERVAL_IN_MS =
-      (Number(core.getInput('check_interval')) || 2) * 1000;
+    /**
+     * Default values for the action inputs
+     */
+    const DEFAULT_MAX_TIMEOUT = 60;
+    const DEFAULT_ALLOW_INACTIVE = false;
+    const DEFAULT_RELATIVE_PATH = '/';
+    const DEFAULT_CHECK_INTERVAL = 2;
 
-    // Fail if we have don't have a github token
+    /**
+     * Action inputs
+     */
+    // The GitHub token used to authenticate with the GitHub API
+    const GITHUB_TOKEN = core.getInput('token', { required: true });
+
+    // The Vercel password used to bypass the preview protection
+    // @deprecated - use VERCEL_BYPASS_SECRET instead
+    const VERCEL_PASSWORD = core.getInput('vercel_password');
+
+    // The Vercel secret used to bypass the deployment protection
+    // @docs https://vercel.com/docs/security/deployment-protection#protection-bypass-for-automation
+    const VERCEL_BYPASS_SECRET = core.getInput('vercel_bypass_secret');
+
+    // Specify the environment to filter GitHub deployments by (e.g., staging or production)
+    const ENVIRONMENT = core.getInput('environment');
+
+    // Whether to allow inactive deployments to be considered successful
+    const ALLOW_INACTIVE =
+      Boolean(core.getInput('allow_inactive')) || DEFAULT_ALLOW_INACTIVE;
+
+    // The relative path to append to the URL
+    const PATH = core.getInput('path') || DEFAULT_RELATIVE_PATH;
+
+    // The maximum number of seconds to wait before timing out
+    const MAX_TIMEOUT =
+      Number(core.getInput('max_timeout')) || DEFAULT_MAX_TIMEOUT;
+
+    // The number of seconds to wait between each request
+    const CHECK_INTERVAL =
+      Number(core.getInput('check_interval')) || DEFAULT_CHECK_INTERVAL;
+    const CHECK_INTERVAL_IN_MS = CHECK_INTERVAL * 1000;
+
+    /**
+     * Safeguards - ensure required inputs are provided
+     */
     if (!GITHUB_TOKEN) {
       core.setFailed('Required field `token` was not provided');
     }
 
-    const octokit = github.getOctokit(GITHUB_TOKEN);
+    /**
+     * Notify the user of using any deprecated inputs
+     */
 
+    if (VERCEL_PASSWORD) {
+      core.notice(
+        'The `vercel_password` input is deprecated. Please use the `vercel_bypass_secret` input instead.'
+      );
+    }
+
+    /**
+     * Set up our Octokit client to interact with the GitHub API
+     * along with some other useful variables from the GitHub context provided by the action
+     */
+
+    const octokit = github.getOctokit(GITHUB_TOKEN);
     const context = github.context;
     const owner = context.repo.owner;
     const repo = context.repo.repo;
+    const pr_number = context.payload.pull_request.number;
+    let sha = context.sha; // The SHA is the commit id
 
-    /**
-     * @type {string}
-     */
-    let sha;
+    // If the action is running in debug mode, print the context object
+    core.debug(`GitHub context: ${JSON.stringify(context, null, 2)}`);
 
-    if (github.context.payload && github.context.payload.pull_request) {
+    // There can be scenarios where the context.sha is not available
+    // In this case, we can try to get the SHA from the pull request
+    if (!sha && pr_number) {
       sha = await getShaForPullRequest({
         octokit,
         owner,
         repo,
-        number: github.context.payload.pull_request.number,
+        number: pr_number,
       });
-    } else if (github.context.sha) {
-      sha = github.context.sha;
     }
 
+    // If we still don't have an SHA, we can't continue
     if (!sha) {
       core.setFailed('Unable to determine SHA. Exiting...');
       return;
@@ -336,7 +202,11 @@ const run = async () => {
       return;
     }
 
-    const status = await waitForStatus({
+    // Get the deployment statuses for the given deployment
+    // This is to find a succesful or inactive (if allow_inactive = true) deployment
+    // it retries until max timeout
+    const status = await waitForDeploymentStatus({
+      octokit,
       owner,
       repo,
       deployment_id: deployment.id,
@@ -354,19 +224,19 @@ const run = async () => {
       return;
     }
 
-    console.log('target url »', targetUrl);
+    core.notice(`output "url" set to ${targetUrl}`);
 
     // Set output
     core.setOutput('url', targetUrl);
 
     // Wait for url to respond with a success
-    console.log(`Waiting for a status code 200 from: ${targetUrl}`);
+    core.info(`Waiting for a status code 200 from: ${targetUrl}`);
 
-    await waitForUrl({
+    await healthCheck({
       url: targetUrl,
       maxTimeout: MAX_TIMEOUT,
       checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,
-      vercelPassword: VERCEL_PASSWORD,
+      bypassSecret: VERCEL_BYPASS_SECRET,
       path: PATH,
     });
   } catch (error) {
@@ -374,4 +244,4 @@ const run = async () => {
   }
 };
 
-exports.run = run;
+module.exports = run;

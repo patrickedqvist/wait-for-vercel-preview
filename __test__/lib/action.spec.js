@@ -1,9 +1,9 @@
 /// @ts-check
-
-const { run } = require('../action');
 const core = require('@actions/core');
 const github = require('@actions/github');
-const { server, rest } = require('./support/server');
+
+const runAction = require('../../action');
+const { server, rest } = require('../support/server');
 const deepmerge = require('deepmerge');
 
 jest.setTimeout(20000);
@@ -44,7 +44,7 @@ describe('wait for vercel preview', () => {
         token: '',
       });
 
-      await run();
+      await runAction();
 
       expect(core.setFailed).toBeCalledWith(
         'Required field `token` was not provided'
@@ -64,7 +64,7 @@ describe('wait for vercel preview', () => {
         },
       });
 
-      await run();
+      await runAction();
 
       expect(core.setFailed).toHaveBeenCalledWith(
         'No pull request number was found'
@@ -84,7 +84,7 @@ describe('wait for vercel preview', () => {
       });
       ghResponse('/repos/gh-user/best-repo-ever/pulls/99', 303, {});
 
-      await run();
+      await runAction();
 
       expect(core.setFailed).toHaveBeenCalledWith(
         'Could not get information about the current pull request'
@@ -112,7 +112,7 @@ describe('wait for vercel preview', () => {
 
       ghResponse('/repos/gh-user/best-repo-ever/deployments', 303, {});
 
-      await run();
+      await runAction();
 
       expect(core.setFailed).toHaveBeenCalledWith(
         'no vercel deployment found, exiting...'
@@ -179,7 +179,7 @@ describe('wait for vercel preview', () => {
       },
     ]);
 
-    await run();
+    await runAction();
 
     expect(core.setFailed).not.toBeCalled();
     expect(core.setOutput).toBeCalledWith(
@@ -209,7 +209,7 @@ describe('wait for vercel preview', () => {
       },
     ]);
 
-    await run();
+    await runAction();
 
     expect(core.setFailed).not.toBeCalled();
     expect(core.setOutput).toBeCalledWith(
@@ -241,7 +241,7 @@ describe('wait for vercel preview', () => {
       },
     ]);
 
-    await run();
+    await runAction();
 
     expect(core.setFailed).not.toBeCalled();
     expect(core.setOutput).toBeCalledWith(
@@ -282,7 +282,7 @@ describe('wait for vercel preview', () => {
       })
     );
 
-    await run();
+    await runAction();
 
     expect(core.setFailed).not.toBeCalled();
     expect(core.setOutput).toHaveBeenCalledWith(

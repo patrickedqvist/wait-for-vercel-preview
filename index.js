@@ -1,3 +1,3 @@
-const { run } = require('./action');
+const runAction = require('./action');
 
-run();
+runAction();

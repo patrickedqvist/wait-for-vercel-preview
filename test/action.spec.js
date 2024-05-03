@@ -294,6 +294,74 @@ describe('wait for vercel preview', () => {
       'a-super-secret-jwt'
     );
   });
+
+  test('resolves the output URL from the vercel deployment statuses', async () => {
+    setInputs({
+      token: 'a-token',
+      check_interval: 1,
+      max_timeout: 10,
+    });
+
+    givenValidGithubResponses();
+
+    // Simulate deployment race-condition
+    restTimes(
+      'https://api.github.com/repos/gh-user/best-repo-ever/deployments',
+      [
+        {
+          status: 200,
+          body: [
+            {
+              id: 'a1a1a1',
+              creator: {
+                login: 'a-user',
+              },
+            },
+          ],
+          times: 2,
+        },
+        {
+          status: 200,
+          body: [
+            {
+              id: 'a1a1a1',
+              creator: {
+                login: 'a-user',
+              },
+            },
+            {
+              id: 'c1c1c1',
+              creator: {
+                login: 'c-user',
+              },
+            },
+          ],
+          times: 1,
+        },
+      ]
+    );
+
+    restTimes('https://my-preview.vercel.app/', [
+      {
+        status: 404,
+        body: '',
+        times: 3,
+      },
+      {
+        status: 200,
+        body: '',
+        times: 1,
+      },
+    ]);
+
+    await run();
+
+    expect(core.setFailed).not.toBeCalled();
+    expect(core.setOutput).toBeCalledWith(
+      'url',
+      'https://my-preview.vercel.app/'
+    );
+  });
 });
 
 /**
@@ -443,12 +511,27 @@ function givenValidGithubResponses() {
     },
   ]);
 
+  const statusEndpointA1a1a1 =
+    '/repos/gh-user/best-repo-ever/deployments/a1a1a1/statuses';
+
+  ghResponse(statusEndpointA1a1a1, 200, [
+    {
+      state: 'in-progress',
+      creator: {
+        login: 'a-user',
+      },
+    },
+  ]);
+
   const statusEndpoint =
     '/repos/gh-user/best-repo-ever/deployments/b2b2b2/statuses';
 
   ghRespondOnce(statusEndpoint, 200, [
     {
       state: 'in-progress',
+      creator: {
+        login: 'vercel[bot]',
+      },
     },
   ]);
 
@@ -456,6 +539,28 @@ function givenValidGithubResponses() {
     {
       state: 'success',
       target_url: 'https://my-preview.vercel.app/',
+      creator: {
+        login: 'vercel[bot]',
+      },
+    },
+  ]);
+
+  const statusEndpointC1c1c1 =
+    '/repos/gh-user/best-repo-ever/deployments/c1c1c1/statuses';
+
+  ghResponse(statusEndpointC1c1c1, 200, [
+    {
+      state: 'success',
+      creator: {
+        login: 'a-user',
+      },
+    },
+    {
+      state: 'success',
+      target_url: 'https://my-preview.vercel.app/',
+      creator: {
+        login: 'vercel[bot]',
+      },
     },
   ]);
 }

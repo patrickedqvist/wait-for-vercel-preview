@@ -1,3 +1,3 @@
-const runAction = require('./action');
+import { runAction } from './action';
 
 runAction();

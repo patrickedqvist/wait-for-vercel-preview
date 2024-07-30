@@ -31,6 +31,10 @@ Optional - How often (in seconds) should we make the HTTP request checking to se
 
 Optional - The [password](https://vercel.com/docs/concepts/projects/overview#password-protection) for the deployment
 
+### `vercel_protection_bypass_header`
+
+Optional - The [header](https://vercel.com/docs/security/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation) to bypass protection for automation
+
 ### `path`
 
 Optional - The URL that tests should run against (eg. `path: "https://vercel.com"`).

@@ -23,6 +23,9 @@ inputs:
   vercel_password:
     description: 'Vercel password protection secret'
     required: false
+  vercel_protection_bypass_header:
+    description: 'Vercel protection bypass for automation'
+    required: false
   path:
     description: 'The path to check. Defaults to the index of the domain'
     default: '/'

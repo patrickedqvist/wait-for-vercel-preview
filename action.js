@@ -15,6 +15,7 @@ const waitForUrl = async ({
   maxTimeout,
   checkIntervalInMilliseconds,
   vercelPassword,
+  protectionBypassHeader,
   path,
 }) => {
   const iterations = calculateIterations(
@@ -37,6 +38,12 @@ const waitForUrl = async ({
         };
 
         core.setOutput('vercel_jwt', jwt);
+      }
+
+      if (protectionBypassHeader) {
+        headers = {
+          'x-vercel-protection-bypass': protectionBypassHeader
+        };
       }
 
       let checkUri = new URL(path, url);
@@ -280,6 +287,7 @@ const run = async () => {
     // Inputs
     const GITHUB_TOKEN = core.getInput('token', { required: true });
     const VERCEL_PASSWORD = core.getInput('vercel_password');
+    const VERCEL_PROTECTION_BYPASS_HEADER = core.getInput('vercel_protection_bypass_header');
     const ENVIRONMENT = core.getInput('environment');
     const MAX_TIMEOUT = Number(core.getInput('max_timeout')) || 60;
     const ALLOW_INACTIVE = Boolean(core.getInput('allow_inactive')) || false;
@@ -367,6 +375,7 @@ const run = async () => {
       maxTimeout: MAX_TIMEOUT,
       checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,
       vercelPassword: VERCEL_PASSWORD,
+      protectionBypassHeader: VERCEL_PROTECTION_BYPASS_HEADER,
       path: PATH,
     });
   } catch (error) {

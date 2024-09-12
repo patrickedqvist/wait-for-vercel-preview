@@ -26,6 +26,9 @@ inputs:
   vercel_protection_bypass_header:
     description: 'Vercel protection bypass for automation'
     required: false
+  basic_auth_credentials_base64:
+    description: 'Basic Auth base64 encoded credentials'
+    required: false
   path:
     description: 'The path to check. Defaults to the index of the domain'
     default: '/'

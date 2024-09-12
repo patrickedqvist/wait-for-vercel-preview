@@ -29,6 +29,10 @@ inputs:
   basic_auth_credentials_base64:
     description: 'Basic Auth base64 encoded credentials'
     required: false
+  skip_health_check:
+    default: 'false'
+    description: 'Basic Auth base64 encoded credentials'
+    required: false
   path:
     description: 'The path to check. Defaults to the index of the domain'
     default: '/'

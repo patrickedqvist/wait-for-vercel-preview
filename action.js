@@ -297,6 +297,7 @@ const run = async () => {
     const VERCEL_PROTECTION_BYPASS_HEADER = core.getInput('vercel_protection_bypass_header');
     const ENVIRONMENT = core.getInput('environment');
     const BASIC_AUTH_CREDENTIALS_BASE_64 = core.getInput('basic_auth_credentials_base64');
+    const SKIP_HEALTH_CHECK = core.getInput('skip_health_check') === 'true';
     const MAX_TIMEOUT = Number(core.getInput('max_timeout')) || 60;
     const ALLOW_INACTIVE = Boolean(core.getInput('allow_inactive')) || false;
     const PATH = core.getInput('path') || '/';
@@ -377,6 +378,11 @@ const run = async () => {
 
     // Wait for url to respond with a success
     console.log(`Waiting for a status code 200 from: ${targetUrl}`);
+
+    if (SKIP_HEALTH_CHECK) {
+      console.log('Skipping health check');
+      return;
+    }
 
     await waitForUrl({
       url: targetUrl,

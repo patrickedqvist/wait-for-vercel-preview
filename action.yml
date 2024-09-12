@@ -1,4 +1,4 @@
-name: 'Wait for Vercel Preview'
+name: 'Wait for Vercel Preview with Basic Auth'
 description: 'Wait for Vercel Deploy Preview to complete. Requires to be run on pull_request or push.'
 branding:
   icon: 'clock'

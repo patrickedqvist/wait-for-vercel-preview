@@ -39,7 +39,7 @@ Optional - The [header](https://vercel.com/docs/security/deployment-protection/m
 
 Optional - Use if your app is protected with basic auth. provide your base64 encoded credentials in form `username:password`, see [basic auth](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization#basic_authentication)
 
-### skip_health_check
+### `skip_health_check``
 Optional - Skip the health check for status code 200 and return the URL immediately after successful deployment. Defaults to `false`.
 
 ### `path`

@@ -382,13 +382,13 @@ const run = async () => {
     // Set output
     core.setOutput('url', targetUrl);
 
-    // Wait for url to respond with a success
-    console.log(`Waiting for a status code 200 from: ${targetUrl}`);
-
     if (SKIP_HEALTH_CHECK) {
       console.log('Skipping health check');
       return;
     }
+
+    // Wait for url to respond with a success
+    console.log(`Waiting for a status code 200 from: ${targetUrl}`);
 
     await waitForUrl({
       url: targetUrl,

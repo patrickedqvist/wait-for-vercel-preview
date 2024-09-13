@@ -27,11 +27,11 @@ inputs:
     description: 'Vercel protection bypass for automation'
     required: false
   basic_auth_credentials_base64:
-    description: 'Basic Auth base64 encoded credentials'
+    description: 'In case the app is protected with Basic Auth, provide base64 encoded credentials in form `username:password`'
     required: false
   skip_health_check:
     default: 'false'
-    description: 'Basic Auth base64 encoded credentials'
+    description: 'Skip health check for status code 200 after deployment'
     required: false
   path:
     description: 'The path to check. Defaults to the index of the domain'

@@ -35,6 +35,13 @@ Optional - The [password](https://vercel.com/docs/concepts/projects/overview#pas
 
 Optional - The [header](https://vercel.com/docs/security/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation) to bypass protection for automation
 
+### `basic_auth_credentials_base64`
+
+Optional - Use if your app is protected with basic auth. provide your base64 encoded credentials in form `username:password`, see [basic auth](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization#basic_authentication)
+
+### skip_health_check
+Optional - Skip the health check for status code 200 and return the URL immediately after successful deployment. Defaults to `false`.
+
 ### `path`
 
 Optional - The URL that tests should run against (eg. `path: "https://vercel.com"`).

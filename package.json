@@ -11,7 +11,7 @@
   "scripts": {
     "test:watch": "vitest",
     "test": "vitest --run",
-    "build": "ncc build src/action.ts -o dist",
+    "build": "ncc build src/index.ts -o dist",
     "type-check": "tsc --noEmit"
   },
   "keywords": [],

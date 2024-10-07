@@ -30,4 +30,4 @@ jobs:
         run: npm ci
 
       - name: test
-        run: npm run test:ci:coverage
+        run: npm run test

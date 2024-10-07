@@ -423,12 +423,12 @@ exports.getIDToken = getIDToken;
 /**
  * Summary exports
  */
-var summary_1 = __nccwpck_require__(8402);
+var summary_1 = __nccwpck_require__(6021);
 Object.defineProperty(exports, "summary", ({ enumerable: true, get: function () { return summary_1.summary; } }));
 /**
  * @deprecated use core.summary
  */
-var summary_2 = __nccwpck_require__(8402);
+var summary_2 = __nccwpck_require__(6021);
 Object.defineProperty(exports, "markdownSummary", ({ enumerable: true, get: function () { return summary_2.markdownSummary; } }));
 /**
  * Path exports
@@ -652,7 +652,7 @@ exports.toPlatformPath = toPlatformPath;
 
 /***/ }),
 
-/***/ 8402:
+/***/ 6021:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 
@@ -32909,6 +32909,29 @@ __nccwpck_require__.d(__webpack_exports__, {
 var core = __nccwpck_require__(7627);
 // EXTERNAL MODULE: ./node_modules/.pnpm/@actions+github@6.0.0/node_modules/@actions/github/lib/github.js
 var github = __nccwpck_require__(3802);
+// EXTERNAL MODULE: ./node_modules/.pnpm/cockatiel@3.2.1/node_modules/cockatiel/dist/index.js
+var dist = __nccwpck_require__(2552);
+;// CONCATENATED MODULE: ./src/generate-backoff-intervals.ts
+/**
+ * Generates an array of backoff intervals for retry attempts.
+ *
+ * @param maxAttempts - The maximum number of retry attempts.
+ * @param intervalSeconds - The interval in seconds to wait between each retry attempt. Default is 30 seconds.
+ * @returns An array of numbers representing the backoff intervals in milliseconds.
+ *
+ * @example
+ * const intervals = generateBackoffIntervals(5);
+ * // Returns: [0, 30000, 60000, 90000, 120000]
+ */
+const generateBackoffIntervals = (maxAttempts, intervalSeconds = 30) => {
+    return Array(maxAttempts)
+        .fill(0)
+        .map((_, i) => {
+        // The intervals should be the multiplied by the attempt number (and not starting with 0)
+        return intervalSeconds * 1000 * (i + 1);
+    });
+};
+
 ;// CONCATENATED MODULE: ./src/find-deployment.ts
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -33039,8 +33062,6 @@ function healthCheck(_a) {
     });
 }
 
-// EXTERNAL MODULE: ./node_modules/.pnpm/cockatiel@3.2.1/node_modules/cockatiel/dist/index.js
-var dist = __nccwpck_require__(2552);
 ;// CONCATENATED MODULE: ./src/action.ts
 var action_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -33051,6 +33072,7 @@ var action_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _a
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+
 
 
 
@@ -33084,7 +33106,7 @@ function runAction() {
             /**
              * A path on the deployment URL to run the health check on
              */
-            const PATH = (0,core.getInput)('path') || '/';
+            const PATH = (0,core.getInput)('path') || '';
             /**
              * @deprecated use max_attempts instead to control the retry policy
              */
@@ -33099,14 +33121,25 @@ function runAction() {
              */
             const MAX_RETRY_ATTEMPTS = Number((0,core.getInput)('max_attempts')) || 20;
             /**
+             * The interval between each retry attempt (defined in seconds)
+             * @default 30s
+             */
+            const RETRY_INTERVAL = Number((0,core.getInput)('retry_interval')) || 30;
+            /**
              * The name of the actor that created the deployment
              * @default vercel[bot]
              */
             const CREATOR_NAME = (0,core.getInput)('deployment_creator_name') || 'vercel[bot]';
             /**
              * The retry policy for the all the different requests
+             * @remarks
+             * We generate an array of backoff intervals that will be used to retry the requests based on the number of MAX_RETRY_ATTEMPTS
+             * for each attempt we add 30 seconds to the backoff interval.
+             * E.g. if MAX_RETRY_ATTEMPTS is 5, the backoff intervals will be [0, 30000, 60000, 90000, 120000]
              */
-            const retryPolicy = (0,dist.retry)(dist.handleAll, { maxAttempts: MAX_RETRY_ATTEMPTS - 1, backoff: new dist.ExponentialBackoff() });
+            const backoffIntervals = generateBackoffIntervals(MAX_RETRY_ATTEMPTS - 1, RETRY_INTERVAL);
+            const backoff = new dist.IterableBackoff(backoffIntervals);
+            const retryPolicy = (0,dist.retry)(dist.handleAll, { maxAttempts: MAX_RETRY_ATTEMPTS - 1, backoff });
             /**
              * Check if required fields are provided
              */
@@ -33127,7 +33160,7 @@ function runAction() {
                 return;
             }
             /**
-             * Find a deployment for the given owner/repo/sha/environment/actor
+             * Stage 1 - Find a deployment for the given owner/repo/sha/environment/actor
              */
             const foundDeployment = yield retryPolicy.execute(({ attempt }) => {
                 console.log(`Stage 1 – Attempt %d/%d to find deployment with environment "%s" and deployment.creator.login "%s"`, attempt + 1, MAX_RETRY_ATTEMPTS, ENVIRONMENT, CREATOR_NAME);
@@ -33146,7 +33179,7 @@ function runAction() {
             }
             console.log('Found deployment with id "%d" and description "%s"', foundDeployment === null || foundDeployment === void 0 ? void 0 : foundDeployment.id, foundDeployment.description);
             /**
-             * Wait for the given deployment to get a state of either "success" or "inactive" if allow_inactve is set to true
+             * Stage 2 - Wait for the given deployment to get a state of either "success" or "inactive" if allow_inactve is set to true
              */
             const deployment = yield retryPolicy.execute(({ attempt }) => {
                 console.log(`Stage 2 – Attempt %d/%d to find a deployment with status of "success"`, attempt + 1, MAX_RETRY_ATTEMPTS);
@@ -33167,7 +33200,9 @@ function runAction() {
                 return;
             }
             console.log('Found deployment with log_url', deployment.log_url);
-            (0,core.setOutput)('url', deployment.log_url);
+            /**
+             * Stage 3 - Perform a health check on the deployment URL
+             */
             const healthCheckUrl = deployment.log_url + PATH;
             const isOk = yield retryPolicy.execute(({ attempt }) => {
                 console.log('Stage 3 - Attempt %d/%d to perform health check for url "%s"', attempt + 1, MAX_RETRY_ATTEMPTS, healthCheckUrl);
@@ -33181,6 +33216,7 @@ function runAction() {
                 return;
             }
             // ALL GOOD!
+            (0,core.setOutput)('url', healthCheckUrl);
             console.log('Health check passed for url "%s"', healthCheckUrl);
             return;
         }

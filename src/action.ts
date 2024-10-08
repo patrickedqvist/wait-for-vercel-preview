@@ -134,7 +134,7 @@ export async function runAction() {
      */
     const pullRequest = await retryPolicy.execute(({ attempt }) => {
       console.log(
-        `Stage 1 – Attempt %d/%d to get information about the pull request "%d"`,
+        `Stage 1 – Attempt %d/%d to get information about pull request "%d"`,
         attempt + 1,
         MAX_RETRY_ATTEMPTS,
         pull_request_number
@@ -161,9 +161,10 @@ export async function runAction() {
      */
     const foundDeployment = await retryPolicy.execute(({ attempt }) => {
       console.log(
-        `Stage 2 – Attempt %d/%d to find deployment with environment "%s" and deployment.creator.login "%s"`,
+        `Stage 2 – Attempt %d/%d to find deployment with sha "%s", environment "%s" and deployment_creator_name "%s"`,
         attempt + 1,
         MAX_RETRY_ATTEMPTS,
+        sha,
         ENVIRONMENT,
         CREATOR_NAME
       );
@@ -179,7 +180,7 @@ export async function runAction() {
 
     if (!foundDeployment) {
       setFailed(
-        `No deployment found that matched either environment "${ENVIRONMENT}" or creator of deployment "${CREATOR_NAME}", exiting...`
+        `No deployment found that matched either sha "${sha}", environment "${ENVIRONMENT}" or creator of deployment "${CREATOR_NAME}", exiting...`
       );
       return;
     }

@@ -33427,7 +33427,7 @@ function runAction() {
              * Stage 1 - Find the pull request
              */
             const pullRequest = yield retryPolicy.execute(({ attempt }) => {
-                console.log(`Stage 1 – Attempt %d/%d to get information about the pull request "%d"`, attempt + 1, MAX_RETRY_ATTEMPTS, pull_request_number);
+                console.log(`Stage 1 – Attempt %d/%d to get information about pull request "%d"`, attempt + 1, MAX_RETRY_ATTEMPTS, pull_request_number);
                 return findPullRequest({
                     client: octokit,
                     owner,
@@ -33445,7 +33445,7 @@ function runAction() {
              * Stage 1 - Find a deployment for the given owner/repo/sha/environment/actor
              */
             const foundDeployment = yield retryPolicy.execute(({ attempt }) => {
-                console.log(`Stage 2 – Attempt %d/%d to find deployment with environment "%s" and deployment.creator.login "%s"`, attempt + 1, MAX_RETRY_ATTEMPTS, ENVIRONMENT, CREATOR_NAME);
+                console.log(`Stage 2 – Attempt %d/%d to find deployment with sha "%s", environment "%s" and deployment_creator_name "%s"`, attempt + 1, MAX_RETRY_ATTEMPTS, sha, ENVIRONMENT, CREATOR_NAME);
                 return findDeployment({
                     client: octokit,
                     owner,
@@ -33456,7 +33456,7 @@ function runAction() {
                 });
             });
             if (!foundDeployment) {
-                (0,core.setFailed)(`No deployment found that matched either environment "${ENVIRONMENT}" or creator of deployment "${CREATOR_NAME}", exiting...`);
+                (0,core.setFailed)(`No deployment found that matched either sha "${sha}", environment "${ENVIRONMENT}" or creator of deployment "${CREATOR_NAME}", exiting...`);
                 return;
             }
             console.log('Found deployment with id "%d" and description "%s"', foundDeployment === null || foundDeployment === void 0 ? void 0 : foundDeployment.id, foundDeployment.description);

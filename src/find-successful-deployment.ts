@@ -3,8 +3,13 @@ import type { GithubRequestParameters } from './request-options';
 import { DeploymentStatusError } from './errors';
 
 const enum DeploymentStatus {
+  Error = 'error',
+  Failure = 'failure',
   Inactive = 'inactive',
+  Pending = 'pending',
   Success = 'success',
+  Queued = 'queued',
+  InProgress = 'in_progress',
 }
 
 interface FindSuccessfulDeploymentOptions extends GithubRequestParameters {
@@ -12,9 +17,26 @@ interface FindSuccessfulDeploymentOptions extends GithubRequestParameters {
    * Instance of Octokit
    */
   client: InstanceType<typeof GitHub>;
+  /**
+   * The ID of a deployment
+   */
   deployment_id: number;
+  /**
+   * Whether to allow deployments with state "inactive" to be returned
+   */
   allow_inactive: boolean;
 }
+
+/**
+ * Finds a successful deployment
+ *
+ * @remarks
+ * It requires the following privileges set on the GitHub token:
+ * - "Deployments" repository permissions (read)
+ *
+ * @throws If no deployment statuses are available or if no deployment status matches the state "success"
+ * @returns A promise that resolves to the deployment status
+ */
 
 export async function findSuccessfulDeployment(options: FindSuccessfulDeploymentOptions) {
   const response = await options.client.rest.repos.listDeploymentStatuses({
@@ -38,6 +60,14 @@ export async function findSuccessfulDeployment(options: FindSuccessfulDeployment
   } else if (status.state === DeploymentStatus.Success) {
     return status;
   } else {
-    throw new DeploymentStatusError('No status available that had a state of "success"');
+    if (options.allow_inactive) {
+      throw new DeploymentStatusError(
+        `No status available that had a state of "success" or "inactive", instead received state "${status.state}"`
+      );
+    } else {
+      throw new DeploymentStatusError(
+        `No status available that had a state of "success", instead received state "${status.state}"`
+      );
+    }
   }
 }

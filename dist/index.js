@@ -33105,14 +33105,17 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
 };
 /**
  * Finds a Github deployment
- * @param options - The options for finding the deployment
- * @throws {Error} If no deployments are available or if no deployment matches the CREATOR_NAME
+ *
  * @remarks
  * listDeployments required the following privileges:
  * - "Deployments" repository permissions (read)
+ *
+ * @throws If no deployments are available or if no deployment matches the passed creatorName to creator.login.name
+ * @returns A promise that resolves to the deployment
  */
 function findDeployment(_a) {
     return __awaiter(this, arguments, void 0, function* ({ client, owner, repo, sha, environment, creatorName }) {
+        var _b;
         try {
             const deployments = yield client.rest.repos.listDeployments({
                 owner,
@@ -33125,7 +33128,9 @@ function findDeployment(_a) {
             }
             const deployment = deployments.data.find((d) => { var _a; return ((_a = d.creator) === null || _a === void 0 ? void 0 : _a.login) === creatorName; });
             if (!deployment) {
-                throw new Error(`No deployment found that matched the deployment.creator.login name "${creatorName} and environment "${environment}" for the sha "${sha}"`);
+                const latestDeployment = deployments.data[0];
+                const msg = `No deployment found that matched the deployment.creator.login name "${creatorName}" and environment "${environment}" for the sha "${sha}", instead latest deployment was created by "${(_b = latestDeployment.creator) === null || _b === void 0 ? void 0 : _b.login}" with environment "${latestDeployment.environment}"`;
+                throw new Error(msg);
             }
             return deployment;
         }
@@ -33153,6 +33158,16 @@ var find_successful_deployment_awaiter = (undefined && undefined.__awaiter) || f
     });
 };
 
+/**
+ * Finds a successful deployment
+ *
+ * @remarks
+ * It requires the following privileges set on the GitHub token:
+ * - "Deployments" repository permissions (read)
+ *
+ * @throws If no deployment statuses are available or if no deployment status matches the state "success"
+ * @returns A promise that resolves to the deployment status
+ */
 function findSuccessfulDeployment(options) {
     return find_successful_deployment_awaiter(this, void 0, void 0, function* () {
         const response = yield options.client.rest.repos.listDeploymentStatuses({
@@ -33174,7 +33189,12 @@ function findSuccessfulDeployment(options) {
             return status;
         }
         else {
-            throw new DeploymentStatusError('No status available that had a state of "success"');
+            if (options.allow_inactive) {
+                throw new DeploymentStatusError(`No status available that had a state of "success" or "inactive", instead received state "${status.state}"`);
+            }
+            else {
+                throw new DeploymentStatusError(`No status available that had a state of "success", instead received state "${status.state}"`);
+            }
         }
     });
 }
@@ -33223,6 +33243,19 @@ function healthCheck(_a) {
     });
 }
 
+;// CONCATENATED MODULE: ./src/log.ts
+/**
+ * Warn the user that a function is deprecated
+ */
+function deprecated(fn, replace) {
+    if (replace) {
+        console.warn('%s is deprecated and will be removed in future version, replace with %s', fn, replace);
+    }
+    else {
+        console.warn('%s is deprecated and will be removed in future version', fn);
+    }
+}
+
 ;// CONCATENATED MODULE: ./src/action.ts
 var action_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -33240,6 +33273,7 @@ var action_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _a
 
 
 
+
 function runAction() {
     return action_awaiter(this, void 0, void 0, function* () {
         try {
@@ -33248,18 +33282,15 @@ function runAction() {
              */
             const GITHUB_TOKEN = (0,core.getInput)('token', { required: true });
             /**
-             * @deprecated use VERCEL_PROTECTION_BYPASS_SECRET instead
+             * A secret to bypass the Vercel protection of the deployment
+             * @docs {@link https://vercel.com/docs/security/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation}
              */
-            const VERCEL_PASSWORD = (0,core.getInput)('vercel_password');
-            /**
-             * @deprecated use VERCEL_PROTECTION_BYPASS_SECRET instead
-             */
-            const VERCEL_PROTECTION_BYPASS_HEADER = (0,core.getInput)('vercel_protection_bypass_header');
             const VERCEL_PROTECTION_BYPASS_SECRET = (0,core.getInput)('vercel_protection_bypass_secret');
             /**
              * The deployment environment to check
+             * @default "Preview"
              */
-            const ENVIRONMENT = (0,core.getInput)('environment');
+            const ENVIRONMENT = (0,core.getInput)('environment') || 'Preview';
             /**
              * Weather or not to allow inactive deployments as a valid deployment
              */
@@ -33268,14 +33299,6 @@ function runAction() {
              * A path on the deployment URL to run the health check on
              */
             const PATH = (0,core.getInput)('path') || '';
-            /**
-             * @deprecated use max_attempts instead to control the retry policy
-             */
-            const MAX_TIMEOUT = Number((0,core.getInput)('max_timeout')) || 60;
-            /**
-             * @deprecated use max_attempts instead to control the retry policy
-             */
-            const CHECK_INTERVAL_IN_MS = (Number((0,core.getInput)('check_interval')) || 2) * 1000;
             /**
              * The maximum number of attempts to retry
              * @default 20
@@ -33291,6 +33314,36 @@ function runAction() {
              * @default vercel[bot]
              */
             const CREATOR_NAME = (0,core.getInput)('deployment_creator_name') || 'vercel[bot]';
+            const defaultMaxTimeout = 60;
+            /**
+             * @deprecated use max_attempts instead to control the retry policy
+             */
+            const MAX_TIMEOUT = Number((0,core.getInput)('max_timeout')) || defaultMaxTimeout;
+            if (MAX_TIMEOUT !== defaultMaxTimeout) {
+                deprecated('max_timeout', 'max_attempts');
+            }
+            const checkIntervalDefaultValue = 2 * 1000;
+            /**
+             * @deprecated use retry_interval instead to control the retry policy
+             */
+            const CHECK_INTERVAL_IN_MS = Number((0,core.getInput)('check_interval')) * 1000 || checkIntervalDefaultValue;
+            if (CHECK_INTERVAL_IN_MS !== checkIntervalDefaultValue) {
+                deprecated('check_interval', 'max_attempts');
+            }
+            /**
+             * @deprecated use VERCEL_PROTECTION_BYPASS_SECRET instead
+             */
+            const VERCEL_PASSWORD = (0,core.getInput)('vercel_password');
+            if (VERCEL_PASSWORD) {
+                deprecated('vercel_password', 'vercel_protection_bypass_secret');
+            }
+            /**
+             * @deprecated use VERCEL_PROTECTION_BYPASS_SECRET instead
+             */
+            const VERCEL_PROTECTION_BYPASS_HEADER = (0,core.getInput)('vercel_protection_bypass_header');
+            if (VERCEL_PROTECTION_BYPASS_HEADER) {
+                deprecated('vercel_password', 'vercel_protection_bypass_secret');
+            }
             /**
              * The retry policy for the all the different requests
              * @remarks

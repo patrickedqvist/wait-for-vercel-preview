@@ -5,6 +5,7 @@ import { generateBackoffIntervals } from './generate-backoff-intervals';
 import { findDeployment } from './find-deployment';
 import { findSuccessfulDeployment } from './find-successful-deployment';
 import { healthCheck } from './health-check';
+import { deprecated } from './log';
 
 export async function runAction() {
   try {
@@ -12,19 +13,18 @@ export async function runAction() {
      * Github token - given by the GitHub environment
      */
     const GITHUB_TOKEN = getInput('token', { required: true });
+
     /**
-     * @deprecated use VERCEL_PROTECTION_BYPASS_SECRET instead
+     * A secret to bypass the Vercel protection of the deployment
+     * @docs {@link https://vercel.com/docs/security/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation}
      */
-    const VERCEL_PASSWORD = getInput('vercel_password');
-    /**
-     * @deprecated use VERCEL_PROTECTION_BYPASS_SECRET instead
-     */
-    const VERCEL_PROTECTION_BYPASS_HEADER = getInput('vercel_protection_bypass_header');
     const VERCEL_PROTECTION_BYPASS_SECRET = getInput('vercel_protection_bypass_secret');
+
     /**
      * The deployment environment to check
+     * @default "Preview"
      */
-    const ENVIRONMENT = getInput('environment');
+    const ENVIRONMENT = getInput('environment') || 'Preview';
 
     /**
      * Weather or not to allow inactive deployments as a valid deployment
@@ -35,15 +35,6 @@ export async function runAction() {
      * A path on the deployment URL to run the health check on
      */
     const PATH = getInput('path') || '';
-
-    /**
-     * @deprecated use max_attempts instead to control the retry policy
-     */
-    const MAX_TIMEOUT = Number(getInput('max_timeout')) || 60;
-    /**
-     * @deprecated use max_attempts instead to control the retry policy
-     */
-    const CHECK_INTERVAL_IN_MS = (Number(getInput('check_interval')) || 2) * 1000;
 
     /**
      * The maximum number of attempts to retry
@@ -63,6 +54,40 @@ export async function runAction() {
      */
     const CREATOR_NAME = getInput('deployment_creator_name') || 'vercel[bot]';
 
+    const defaultMaxTimeout = 60;
+    /**
+     * @deprecated use max_attempts instead to control the retry policy
+     */
+    const MAX_TIMEOUT = Number(getInput('max_timeout')) || defaultMaxTimeout;
+    if (MAX_TIMEOUT !== defaultMaxTimeout) {
+      deprecated('max_timeout', 'max_attempts');
+    }
+
+    const checkIntervalDefaultValue = 2 * 1000;
+    /**
+     * @deprecated use retry_interval instead to control the retry policy
+     */
+    const CHECK_INTERVAL_IN_MS = Number(getInput('check_interval')) * 1000 || checkIntervalDefaultValue;
+    if (CHECK_INTERVAL_IN_MS !== checkIntervalDefaultValue) {
+      deprecated('check_interval', 'max_attempts');
+    }
+
+    /**
+     * @deprecated use VERCEL_PROTECTION_BYPASS_SECRET instead
+     */
+    const VERCEL_PASSWORD = getInput('vercel_password');
+    if (VERCEL_PASSWORD) {
+      deprecated('vercel_password', 'vercel_protection_bypass_secret');
+    }
+
+    /**
+     * @deprecated use VERCEL_PROTECTION_BYPASS_SECRET instead
+     */
+    const VERCEL_PROTECTION_BYPASS_HEADER = getInput('vercel_protection_bypass_header');
+    if (VERCEL_PROTECTION_BYPASS_HEADER) {
+      deprecated('vercel_password', 'vercel_protection_bypass_secret');
+    }
+
     /**
      * The retry policy for the all the different requests
      * @remarks
@@ -70,7 +95,6 @@ export async function runAction() {
      * for each attempt we add 30 seconds to the backoff interval.
      * E.g. if MAX_RETRY_ATTEMPTS is 5, the backoff intervals will be [0, 30000, 60000, 90000, 120000]
      */
-
     const backoffIntervals = generateBackoffIntervals(MAX_RETRY_ATTEMPTS - 1, RETRY_INTERVAL);
     const backoff = new IterableBackoff(backoffIntervals);
     const retryPolicy = retry(handleAll, { maxAttempts: MAX_RETRY_ATTEMPTS - 1, backoff });

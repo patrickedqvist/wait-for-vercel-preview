@@ -12,21 +12,25 @@ interface FindDeploymentOptions extends GithubRequestParameters {
   sha: string;
   /**
    * The name of the environment that was deployed to (e.g., staging or production).
+   * For vercel pull request deployments this is usually "Preview".
    */
   environment: string;
   /**
    * The name of the one who created the deployment
+   * For Vercel deployments this is normally "vercel[bot]"
    */
   creatorName: string;
 }
 
 /**
  * Finds a Github deployment
- * @param options - The options for finding the deployment
- * @throws {Error} If no deployments are available or if no deployment matches the CREATOR_NAME
+ *
  * @remarks
  * listDeployments required the following privileges:
  * - "Deployments" repository permissions (read)
+ *
+ * @throws If no deployments are available or if no deployment matches the passed creatorName to creator.login.name
+ * @returns A promise that resolves to the deployment
  */
 export async function findDeployment({ client, owner, repo, sha, environment, creatorName }: FindDeploymentOptions) {
   try {
@@ -44,9 +48,9 @@ export async function findDeployment({ client, owner, repo, sha, environment, cr
     const deployment = deployments.data.find((d) => d.creator?.login === creatorName);
 
     if (!deployment) {
-      throw new Error(
-        `No deployment found that matched the deployment.creator.login name "${creatorName} and environment "${environment}" for the sha "${sha}"`
-      );
+      const latestDeployment = deployments.data[0];
+      const msg = `No deployment found that matched the deployment.creator.login name "${creatorName}" and environment "${environment}" for the sha "${sha}", instead latest deployment was created by "${latestDeployment.creator?.login}" with environment "${latestDeployment.environment}"`;
+      throw new Error(msg);
     }
 
     return deployment;

@@ -68,7 +68,9 @@ describe('wait for vercel preview', () => {
       sha: 'b7d4d3f8c9e2a1f0d6b5c4a3e2d1f0b9a8c7d6e5',
     });
     await runAction();
-    expect(core.setFailed).toHaveBeenCalledWith('No status available that had a state of "success"');
+    expect(core.setFailed).toHaveBeenCalledWith(
+      'No status available that had a state of "success", instead received state "in-progress"'
+    );
   });
 
   it('should set the output url', async () => {

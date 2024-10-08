@@ -40,15 +40,19 @@ describe('wait for vercel preview', () => {
       token: '',
       max_attempts: 3,
     });
+    setGithubContext({
+      sha: '',
+    });
     await runAction();
     expect(core.setFailed).toBeCalledWith('Required field "token" was not provided');
   });
 
-  it('should exit if no pr_number is available from the context', async () => {
+  it('should exit if no pr_number or sha is available from the context', async () => {
     setInputs({
       token: 'a-token',
     });
     setGithubContext({
+      sha: '',
       payload: {
         pull_request: {
           number: undefined,
@@ -56,7 +60,9 @@ describe('wait for vercel preview', () => {
       },
     });
     await runAction();
-    expect(core.setFailed).toHaveBeenCalledWith('Unable to determine pull request number from context. Exiting...');
+    expect(core.setFailed).toHaveBeenCalledWith(
+      'Could not find a sha to use, exiting... Are you running this action on a pull request or push event?'
+    );
   });
 
   it('should exit if there is no deployment with status "success"', async () => {
@@ -67,6 +73,7 @@ describe('wait for vercel preview', () => {
       max_attempts: 3,
       retry_interval: 1,
     });
+    setGithubContext({});
     await runAction();
     expect(core.setFailed).toHaveBeenCalledWith(
       'No deployment found that matched the deployment.creator.login name "octofail" and environment "production" for the sha "a84d88e7554fc1fa21bcbc4efae3c782a70d2b9d", instead latest deployment was created by "octocat" with environment "production"'
@@ -80,6 +87,7 @@ describe('wait for vercel preview', () => {
       environment: 'production',
       max_attempts: 3,
     });
+    setGithubContext({});
     await runAction();
     expect(core.setFailed).not.toHaveBeenCalled();
     expect(core.setOutput).toHaveBeenCalledWith('url', 'https://example.com/deployment/42/output');
@@ -94,6 +102,7 @@ describe('wait for vercel preview', () => {
       path: '/protected',
       max_attempts: 3,
     });
+    setGithubContext({});
     await runAction();
     expect(core.setFailed).not.toHaveBeenCalled();
     expect(core.setOutput).toHaveBeenCalledWith('url', 'https://example.com/deployment/42/output/protected');
@@ -135,6 +144,7 @@ function setInputs(inputs: SetInputsOptions = {}) {
 }
 
 interface GithubContext {
+  sha: string;
   repo: {
     owner: string;
     repo: string;
@@ -148,6 +158,7 @@ interface GithubContext {
 
 function setGithubContext(ctx: Partial<GithubContext>) {
   const defaultCtx: GithubContext = {
+    sha: 'a84d88e7554fc1fa21bcbc4efae3c782a70d2b9d',
     repo: {
       owner: 'octocat',
       repo: 'example',

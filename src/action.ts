@@ -117,54 +117,60 @@ export async function runAction() {
     const { owner, repo } = context.repo;
     const { pull_request } = context.payload;
 
-    if (!pull_request) {
-      setFailed('This action is only supported on pull_request events. Exiting...');
-      return;
-    }
-
-    const pull_request_number = pull_request.number;
-
-    if (!pull_request_number) {
-      setFailed('Unable to determine pull request number from context. Exiting...');
-      return;
-    }
-
     /**
-     * Stage 1 - Find the pull request
+     * The sha we will be using for looking up deployments for, this is the head sha of the pull request
+     * or the sha of the commit if the action is not triggered by a pull request, e.g a push event
      */
-    const pullRequest = await retryPolicy.execute(({ attempt }) => {
-      console.log(
-        `Stage 1 – Attempt %d/%d to get information about pull request "%d"`,
-        attempt + 1,
-        MAX_RETRY_ATTEMPTS,
-        pull_request_number
-      );
-      return findPullRequest({
-        client: octokit,
-        owner,
-        repo,
-        pr_number: pull_request_number,
+    let SHA: string = '';
+
+    /**
+     * If we are running on a pull request, we need to find the pull request and get the head sha
+     */
+    if (pull_request?.number) {
+      /**
+       * Stage 1 - Find the pull request
+       */
+      const pullRequest = await retryPolicy.execute(({ attempt }) => {
+        console.log(
+          `Stage 1 – Attempt %d/%d to get information about pull request "%d"`,
+          attempt + 1,
+          MAX_RETRY_ATTEMPTS,
+          pull_request.number
+        );
+        return findPullRequest({
+          client: octokit,
+          owner,
+          repo,
+          pr_number: pull_request.number,
+        });
       });
-    });
 
-    const sha = pullRequest.head.sha;
+      if (!pullRequest.head.sha) {
+        setFailed('The pull request does not have a head sha, this is required to find the deployment. Exiting...');
+        return;
+      }
 
-    if (!pullRequest.head.sha) {
-      setFailed('The pull request does not have a head sha, this is required to find the deployment. Exiting...');
+      console.log('Found pull request with title "%s" and sha "%s"', pullRequest.title, pullRequest.head.sha);
+      SHA = pullRequest.head.sha;
+    } else if (!pull_request?.number && context.sha) {
+      console.log('Running on a push event, using the context sha "%s"', context.sha);
+      SHA = context.sha;
+    }
+
+    if (!SHA) {
+      setFailed('Could not find a sha to use, exiting... Are you running this action on a pull request or push event?');
       return;
     }
 
-    console.log('Found pull request with title "%s" and sha "%s"', pullRequest.title, sha);
-
     /**
-     * Stage 1 - Find a deployment for the given owner/repo/sha/environment/actor
+     * Stage 1 - Find a deployment for the given owner/repo/sha/environment/creatorName
      */
     const foundDeployment = await retryPolicy.execute(({ attempt }) => {
       console.log(
         `Stage 2 – Attempt %d/%d to find deployment with sha "%s", environment "%s" and deployment_creator_name "%s"`,
         attempt + 1,
         MAX_RETRY_ATTEMPTS,
-        sha,
+        SHA,
         ENVIRONMENT,
         CREATOR_NAME
       );
@@ -172,7 +178,7 @@ export async function runAction() {
         client: octokit,
         owner,
         repo,
-        sha: sha,
+        sha: SHA,
         environment: ENVIRONMENT,
         creatorName: CREATOR_NAME,
       });
@@ -180,7 +186,7 @@ export async function runAction() {
 
     if (!foundDeployment) {
       setFailed(
-        `No deployment found that matched either sha "${sha}", environment "${ENVIRONMENT}" or creator of deployment "${CREATOR_NAME}", exiting...`
+        `No deployment found that matched either sha "${SHA}", environment "${ENVIRONMENT}" or creator of deployment "${CREATOR_NAME}", exiting...`
       );
       return;
     }

@@ -31174,6 +31174,525 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
+/***/ 3332:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.runAction = runAction;
+const core_1 = __nccwpck_require__(7627);
+const github_1 = __nccwpck_require__(3802);
+const cockatiel_1 = __nccwpck_require__(2552);
+const generate_backoff_intervals_1 = __nccwpck_require__(8655);
+const find_pull_request_1 = __nccwpck_require__(285);
+const find_deployment_1 = __nccwpck_require__(6653);
+const find_successful_deployment_1 = __nccwpck_require__(818);
+const health_check_1 = __nccwpck_require__(1549);
+const log_1 = __nccwpck_require__(2046);
+function runAction() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            /**
+             * Github token - given by the GitHub environment
+             */
+            const GITHUB_TOKEN = (0, core_1.getInput)('token', { required: true });
+            /**
+             * A secret to bypass the Vercel protection of the deployment
+             * @docs {@link https://vercel.com/docs/security/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation}
+             */
+            const VERCEL_PROTECTION_BYPASS_SECRET = (0, core_1.getInput)('vercel_protection_bypass_secret');
+            /**
+             * The deployment environment to check
+             * @default "Preview"
+             */
+            const ENVIRONMENT = (0, core_1.getInput)('environment') || 'Preview';
+            /**
+             * Weather or not to allow inactive deployments as a valid deployment
+             */
+            const ALLOW_INACTIVE = Boolean((0, core_1.getInput)('allow_inactive')) || false;
+            /**
+             * A path on the deployment URL to run the health check on
+             */
+            const PATH = (0, core_1.getInput)('path') || '';
+            /**
+             * The maximum number of attempts to retry
+             * @default 20
+             */
+            const MAX_RETRY_ATTEMPTS = Number((0, core_1.getInput)('max_attempts')) || 20;
+            /**
+             * The interval between each retry attempt (defined in seconds)
+             * @default 30s
+             */
+            const RETRY_INTERVAL = Number((0, core_1.getInput)('retry_interval')) || 30;
+            /**
+             * The name of the actor that created the deployment
+             * @default vercel[bot]
+             */
+            const CREATOR_NAME = (0, core_1.getInput)('deployment_creator_name') || 'vercel[bot]';
+            const defaultMaxTimeout = 60;
+            /**
+             * @deprecated use max_attempts instead to control the retry policy
+             */
+            const MAX_TIMEOUT = Number((0, core_1.getInput)('max_timeout')) || defaultMaxTimeout;
+            if (MAX_TIMEOUT !== defaultMaxTimeout) {
+                (0, log_1.deprecated)('max_timeout', 'max_attempts');
+            }
+            const checkIntervalDefaultValue = 2 * 1000;
+            /**
+             * @deprecated use retry_interval instead to control the retry policy
+             */
+            const CHECK_INTERVAL_IN_MS = Number((0, core_1.getInput)('check_interval')) * 1000 || checkIntervalDefaultValue;
+            if (CHECK_INTERVAL_IN_MS !== checkIntervalDefaultValue) {
+                (0, log_1.deprecated)('check_interval', 'max_attempts');
+            }
+            /**
+             * @deprecated use VERCEL_PROTECTION_BYPASS_SECRET instead
+             */
+            const VERCEL_PASSWORD = (0, core_1.getInput)('vercel_password');
+            if (VERCEL_PASSWORD) {
+                (0, log_1.deprecated)('vercel_password', 'vercel_protection_bypass_secret');
+            }
+            /**
+             * @deprecated use VERCEL_PROTECTION_BYPASS_SECRET instead
+             */
+            const VERCEL_PROTECTION_BYPASS_HEADER = (0, core_1.getInput)('vercel_protection_bypass_header');
+            if (VERCEL_PROTECTION_BYPASS_HEADER) {
+                (0, log_1.deprecated)('vercel_password', 'vercel_protection_bypass_secret');
+            }
+            /**
+             * The retry policy for the all the different requests
+             * @remarks
+             * We generate an array of backoff intervals that will be used to retry the requests based on the number of MAX_RETRY_ATTEMPTS
+             * for each attempt we add 30 seconds to the backoff interval.
+             * E.g. if MAX_RETRY_ATTEMPTS is 5, the backoff intervals will be [0, 30000, 60000, 90000, 120000]
+             */
+            const backoffIntervals = (0, generate_backoff_intervals_1.generateBackoffIntervals)(MAX_RETRY_ATTEMPTS - 1, RETRY_INTERVAL);
+            const backoff = new cockatiel_1.IterableBackoff(backoffIntervals);
+            const retryPolicy = (0, cockatiel_1.retry)(cockatiel_1.handleAll, { maxAttempts: MAX_RETRY_ATTEMPTS - 1, backoff });
+            /**
+             * Check if required fields are provided
+             */
+            if (!GITHUB_TOKEN) {
+                (0, core_1.setFailed)('Required field "token" was not provided');
+                return;
+            }
+            /**
+             * Setup Octokit and our contextual information
+             */
+            const octokit = (0, github_1.getOctokit)(GITHUB_TOKEN, {
+                request: fetch,
+            });
+            const { owner, repo } = github_1.context.repo;
+            const { pull_request } = github_1.context.payload;
+            /**
+             * The sha we will be using for looking up deployments for, this is the head sha of the pull request
+             * or the sha of the commit if the action is not triggered by a pull request, e.g a push event
+             */
+            let SHA = '';
+            /**
+             * If we are running on a pull request, we need to find the pull request and get the head sha
+             */
+            if (pull_request === null || pull_request === void 0 ? void 0 : pull_request.number) {
+                /**
+                 * Stage 1 - Find the pull request
+                 */
+                const pullRequest = yield retryPolicy.execute(({ attempt }) => {
+                    console.log(`Stage 1 – Attempt %d/%d to get information about pull request "%d"`, attempt + 1, MAX_RETRY_ATTEMPTS, pull_request.number);
+                    return (0, find_pull_request_1.findPullRequest)({
+                        client: octokit,
+                        owner,
+                        repo,
+                        pr_number: pull_request.number,
+                    });
+                });
+                if (!pullRequest.head.sha) {
+                    (0, core_1.setFailed)('The pull request does not have a head sha, this is required to find the deployment. Exiting...');
+                    return;
+                }
+                console.log('Found pull request with title "%s" and sha "%s"', pullRequest.title, pullRequest.head.sha);
+                SHA = pullRequest.head.sha;
+            }
+            else if (!(pull_request === null || pull_request === void 0 ? void 0 : pull_request.number) && github_1.context.sha) {
+                console.log('Running on a push event, using the context sha "%s"', github_1.context.sha);
+                SHA = github_1.context.sha;
+            }
+            if (!SHA) {
+                (0, core_1.setFailed)('Could not find a sha to use, exiting... Are you running this action on a pull request or push event?');
+                return;
+            }
+            /**
+             * Stage 1 - Find a deployment for the given owner/repo/sha/environment/creatorName
+             */
+            const foundDeployment = yield retryPolicy.execute(({ attempt }) => {
+                console.log(`Stage 2 – Attempt %d/%d to find deployment with sha "%s", environment "%s" and deployment_creator_name "%s"`, attempt + 1, MAX_RETRY_ATTEMPTS, SHA, ENVIRONMENT, CREATOR_NAME);
+                return (0, find_deployment_1.findDeployment)({
+                    client: octokit,
+                    owner,
+                    repo,
+                    sha: SHA,
+                    environment: ENVIRONMENT,
+                    creatorName: CREATOR_NAME,
+                });
+            });
+            if (!foundDeployment) {
+                (0, core_1.setFailed)(`No deployment found that matched either sha "${SHA}", environment "${ENVIRONMENT}" or creator of deployment "${CREATOR_NAME}", exiting...`);
+                return;
+            }
+            console.log('Found deployment with id "%d" and description "%s"', foundDeployment === null || foundDeployment === void 0 ? void 0 : foundDeployment.id, foundDeployment.description);
+            /**
+             * Stage 2 - Wait for the given deployment to get a state of either "success" or "inactive" if allow_inactve is set to true
+             */
+            const deployment = yield retryPolicy.execute(({ attempt }) => {
+                console.log(`Stage 3 – Attempt %d/%d to find a deployment with status of "success"`, attempt + 1, MAX_RETRY_ATTEMPTS);
+                return (0, find_successful_deployment_1.findSuccessfulDeployment)({
+                    client: octokit,
+                    owner,
+                    repo,
+                    deployment_id: foundDeployment.id,
+                    allow_inactive: ALLOW_INACTIVE,
+                });
+            });
+            if (!deployment) {
+                (0, core_1.setFailed)('No deployment found that was either successful or inactive (applicable only if allow_inactive is set to true)');
+                return;
+            }
+            else if (!deployment.log_url) {
+                (0, core_1.setFailed)(`no target_url found in the status check`);
+                return;
+            }
+            console.log('Found deployment with log_url', deployment.log_url);
+            /**
+             * Stage 3 - Perform a health check on the deployment URL
+             */
+            const healthCheckUrl = deployment.log_url + PATH;
+            const isOk = yield retryPolicy.execute(({ attempt }) => {
+                console.log('Stage 4 - Attempt %d/%d to perform health check for url "%s"', attempt + 1, MAX_RETRY_ATTEMPTS, healthCheckUrl);
+                return (0, health_check_1.healthCheck)({
+                    url: healthCheckUrl,
+                    vercel_bypass_secret: VERCEL_PROTECTION_BYPASS_SECRET,
+                });
+            });
+            if (!isOk) {
+                (0, core_1.setFailed)(`Health check failed for url: "%s" - make sure that you either provide a bypass secret or turn off deployment protection`);
+                return;
+            }
+            // ALL GOOD!
+            (0, core_1.setOutput)('url', healthCheckUrl);
+            console.log('Health check passed for url "%s"', healthCheckUrl);
+            return;
+        }
+        catch (error) {
+            (0, core_1.setFailed)(error.message);
+        }
+    });
+}
+
+
+/***/ }),
+
+/***/ 941:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DeploymentStatusError = void 0;
+class DeploymentStatusError extends Error {
+    constructor(message) {
+        super(message);
+    }
+}
+exports.DeploymentStatusError = DeploymentStatusError;
+
+
+/***/ }),
+
+/***/ 6653:
+/***/ (function(__unused_webpack_module, exports) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.findDeployment = findDeployment;
+/**
+ * Finds a Github deployment
+ *
+ * @remarks
+ * listDeployments required the following privileges:
+ * - "Deployments" repository permissions (read)
+ *
+ * @throws If no deployments are available or if no deployment matches the passed creatorName to creator.login.name
+ * @returns A promise that resolves to the deployment
+ */
+function findDeployment(_a) {
+    return __awaiter(this, arguments, void 0, function* ({ client, owner, repo, sha, environment, creatorName, }) {
+        var _b;
+        try {
+            const deployments = yield client.rest.repos.listDeployments({
+                owner,
+                repo,
+                sha,
+                environment,
+            });
+            if (!Array.isArray(deployments.data) || deployments.data.length === 0) {
+                throw new Error(`Could not find any deployments for the given sha "${sha}" and environment "${environment}"`);
+            }
+            const deployment = deployments.data.find((d) => { var _a; return ((_a = d.creator) === null || _a === void 0 ? void 0 : _a.login) === creatorName; });
+            if (!deployment) {
+                const latestDeployment = deployments.data[0];
+                const msg = `No deployment found that matched the deployment.creator.login name "${creatorName}" and environment "${environment}" for the sha "${sha}", instead latest deployment was created by "${(_b = latestDeployment.creator) === null || _b === void 0 ? void 0 : _b.login}" with environment "${latestDeployment.environment}"`;
+                throw new Error(msg);
+            }
+            return deployment;
+        }
+        catch (error) {
+            throw error;
+        }
+    });
+}
+
+
+/***/ }),
+
+/***/ 285:
+/***/ (function(__unused_webpack_module, exports) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.findPullRequest = findPullRequest;
+/**
+ * Retrieves the SHA of the head commit for a given pull request.
+ *
+ * @remarks
+ * This function uses the GitHub Octokit API to fetch information about a specific pull request
+ * and extract the SHA of its head commit. It's useful for getting the latest commit reference
+ * associated with a pull request.
+ *
+ * It requires at least one of the following permission sets:
+ * - "Pull requests" repository permissions (read)
+ * - "Contents" repository permissions (read)
+ *
+ * @throws Throws an error if no PR number is provided or if the API request fails.
+ * @returns A promise that resolves to the SHA of the pull request's head commit.
+ */
+function findPullRequest(_a) {
+    return __awaiter(this, arguments, void 0, function* ({ client, owner, repo, pr_number }) {
+        try {
+            const response = yield client.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: pr_number,
+            });
+            if (response.status !== 200) {
+                throw new Error(`Failed to get pull request information for PR number: ${pr_number}`);
+            }
+            return response.data;
+        }
+        catch (error) {
+            throw error;
+        }
+    });
+}
+
+
+/***/ }),
+
+/***/ 818:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.findSuccessfulDeployment = findSuccessfulDeployment;
+const errors_1 = __nccwpck_require__(941);
+/**
+ * Finds a successful deployment
+ *
+ * @remarks
+ * It requires the following privileges set on the GitHub token:
+ * - "Deployments" repository permissions (read)
+ *
+ * @throws If no deployment statuses are available or if no deployment status matches the state "success"
+ * @returns A promise that resolves to the deployment status
+ */
+function findSuccessfulDeployment(options) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const response = yield options.client.rest.repos.listDeploymentStatuses({
+            owner: options.owner,
+            repo: options.repo,
+            deployment_id: options.deployment_id,
+        });
+        if (!Array.isArray(response.data) || response.data.length === 0) {
+            throw new errors_1.DeploymentStatusError('No deployment statuses were available at this time');
+        }
+        const status = response.data[0];
+        if (!status) {
+            throw new errors_1.DeploymentStatusError('No status was available');
+        }
+        if (options.allow_inactive && status.state === "inactive" /* DeploymentStatus.Inactive */) {
+            return status;
+        }
+        else if (status.state === "success" /* DeploymentStatus.Success */) {
+            return status;
+        }
+        else {
+            if (options.allow_inactive) {
+                throw new errors_1.DeploymentStatusError(`No status available that had a state of "success" or "inactive", instead received state "${status.state}"`);
+            }
+            else {
+                throw new errors_1.DeploymentStatusError(`No status available that had a state of "success", instead received state "${status.state}"`);
+            }
+        }
+    });
+}
+
+
+/***/ }),
+
+/***/ 8655:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.generateBackoffIntervals = void 0;
+/**
+ * Generates an array of backoff intervals for retry attempts.
+ *
+ * @param maxAttempts - The maximum number of retry attempts.
+ * @param intervalSeconds - The interval in seconds to wait between each retry attempt. Default is 30 seconds.
+ * @returns An array of numbers representing the backoff intervals in milliseconds.
+ *
+ * @example
+ * const intervals = generateBackoffIntervals(5);
+ * // Returns: [0, 30000, 60000, 90000, 120000]
+ */
+const generateBackoffIntervals = (maxAttempts, intervalSeconds = 30) => {
+    return Array(maxAttempts)
+        .fill(0)
+        .map((_, i) => {
+        // The intervals should be the multiplied by the attempt number (and not starting with 0)
+        return intervalSeconds * 1000 * (i + 1);
+    });
+};
+exports.generateBackoffIntervals = generateBackoffIntervals;
+
+
+/***/ }),
+
+/***/ 1549:
+/***/ (function(__unused_webpack_module, exports) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.healthCheck = healthCheck;
+function getResource(request) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const response = yield fetch(request);
+        if (!response.ok) {
+            throw new Error(`Health check failed - response not OK, statusCode: ${response.statusText}`);
+        }
+        // Any status code that is not SUCCESS or a REDIRECT should be considered as a failure
+        const statusCode = response.status;
+        if (statusCode > 200 && statusCode < 302) {
+            throw new Error(`Health check failed - statusCode: ${response.statusText}`);
+        }
+        return response;
+    });
+}
+function healthCheck(_a) {
+    return __awaiter(this, arguments, void 0, function* ({ url, vercel_bypass_secret }) {
+        try {
+            const headers = new Headers();
+            // Add the necessary header in order to bypass the deployment protection of Vercel
+            if (vercel_bypass_secret) {
+                headers.append('x-vercel-protection-bypass', vercel_bypass_secret);
+            }
+            const request = new Request(url, {
+                headers,
+            });
+            return yield getResource(request);
+        }
+        catch (error) {
+            console.log('Error in health check', error.message);
+            throw error;
+        }
+    });
+}
+
+
+/***/ }),
+
+/***/ 2046:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.deprecated = deprecated;
+/**
+ * Warn the user that a function is deprecated
+ */
+function deprecated(fn, replace) {
+    if (replace) {
+        console.warn('%s is deprecated and will be removed in future version, replace with %s', fn, replace);
+    }
+    else {
+        console.warn('%s is deprecated and will be removed in future version', fn);
+    }
+}
+
+
+/***/ }),
+
 /***/ 2613:
 /***/ ((module) => {
 
@@ -33065,452 +33584,11 @@ var __webpack_exports__ = {};
 // This entry need to be wrapped in an IIFE because it need to be in strict mode.
 (() => {
 "use strict";
+var exports = __webpack_exports__;
 
-// EXTERNAL MODULE: ./node_modules/.pnpm/@actions+core@1.10.1/node_modules/@actions/core/lib/core.js
-var core = __nccwpck_require__(7627);
-// EXTERNAL MODULE: ./node_modules/.pnpm/@actions+github@6.0.0/node_modules/@actions/github/lib/github.js
-var github = __nccwpck_require__(3802);
-// EXTERNAL MODULE: ./node_modules/.pnpm/cockatiel@3.2.1/node_modules/cockatiel/dist/index.js
-var dist = __nccwpck_require__(2552);
-;// CONCATENATED MODULE: ./src/generate-backoff-intervals.ts
-/**
- * Generates an array of backoff intervals for retry attempts.
- *
- * @param maxAttempts - The maximum number of retry attempts.
- * @param intervalSeconds - The interval in seconds to wait between each retry attempt. Default is 30 seconds.
- * @returns An array of numbers representing the backoff intervals in milliseconds.
- *
- * @example
- * const intervals = generateBackoffIntervals(5);
- * // Returns: [0, 30000, 60000, 90000, 120000]
- */
-const generateBackoffIntervals = (maxAttempts, intervalSeconds = 30) => {
-    return Array(maxAttempts)
-        .fill(0)
-        .map((_, i) => {
-        // The intervals should be the multiplied by the attempt number (and not starting with 0)
-        return intervalSeconds * 1000 * (i + 1);
-    });
-};
-
-;// CONCATENATED MODULE: ./src/find-pull-request.ts
-var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
-/**
- * Retrieves the SHA of the head commit for a given pull request.
- *
- * @remarks
- * This function uses the GitHub Octokit API to fetch information about a specific pull request
- * and extract the SHA of its head commit. It's useful for getting the latest commit reference
- * associated with a pull request.
- *
- * It requires at least one of the following permission sets:
- * - "Pull requests" repository permissions (read)
- * - "Contents" repository permissions (read)
- *
- * @throws Throws an error if no PR number is provided or if the API request fails.
- * @returns A promise that resolves to the SHA of the pull request's head commit.
- */
-function findPullRequest(_a) {
-    return __awaiter(this, arguments, void 0, function* ({ client, owner, repo, pr_number }) {
-        try {
-            const response = yield client.rest.pulls.get({
-                owner,
-                repo,
-                pull_number: pr_number,
-            });
-            if (response.status !== 200) {
-                throw new Error(`Failed to get pull request information for PR number: ${pr_number}`);
-            }
-            return response.data;
-        }
-        catch (error) {
-            throw error;
-        }
-    });
-}
-
-;// CONCATENATED MODULE: ./src/find-deployment.ts
-var find_deployment_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
-/**
- * Finds a Github deployment
- *
- * @remarks
- * listDeployments required the following privileges:
- * - "Deployments" repository permissions (read)
- *
- * @throws If no deployments are available or if no deployment matches the passed creatorName to creator.login.name
- * @returns A promise that resolves to the deployment
- */
-function findDeployment(_a) {
-    return find_deployment_awaiter(this, arguments, void 0, function* ({ client, owner, repo, sha, environment, creatorName, }) {
-        var _b;
-        try {
-            const deployments = yield client.rest.repos.listDeployments({
-                owner,
-                repo,
-                sha,
-                environment,
-            });
-            if (!Array.isArray(deployments.data) || deployments.data.length === 0) {
-                throw new Error(`Could not find any deployments for the given sha "${sha}" and environment "${environment}"`);
-            }
-            const deployment = deployments.data.find((d) => { var _a; return ((_a = d.creator) === null || _a === void 0 ? void 0 : _a.login) === creatorName; });
-            if (!deployment) {
-                const latestDeployment = deployments.data[0];
-                const msg = `No deployment found that matched the deployment.creator.login name "${creatorName}" and environment "${environment}" for the sha "${sha}", instead latest deployment was created by "${(_b = latestDeployment.creator) === null || _b === void 0 ? void 0 : _b.login}" with environment "${latestDeployment.environment}"`;
-                throw new Error(msg);
-            }
-            return deployment;
-        }
-        catch (error) {
-            throw error;
-        }
-    });
-}
-
-;// CONCATENATED MODULE: ./src/errors.ts
-class DeploymentStatusError extends Error {
-    constructor(message) {
-        super(message);
-    }
-}
-
-;// CONCATENATED MODULE: ./src/find-successful-deployment.ts
-var find_successful_deployment_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
-
-/**
- * Finds a successful deployment
- *
- * @remarks
- * It requires the following privileges set on the GitHub token:
- * - "Deployments" repository permissions (read)
- *
- * @throws If no deployment statuses are available or if no deployment status matches the state "success"
- * @returns A promise that resolves to the deployment status
- */
-function findSuccessfulDeployment(options) {
-    return find_successful_deployment_awaiter(this, void 0, void 0, function* () {
-        const response = yield options.client.rest.repos.listDeploymentStatuses({
-            owner: options.owner,
-            repo: options.repo,
-            deployment_id: options.deployment_id,
-        });
-        if (!Array.isArray(response.data) || response.data.length === 0) {
-            throw new DeploymentStatusError('No deployment statuses were available at this time');
-        }
-        const status = response.data[0];
-        if (!status) {
-            throw new DeploymentStatusError('No status was available');
-        }
-        if (options.allow_inactive && status.state === "inactive" /* DeploymentStatus.Inactive */) {
-            return status;
-        }
-        else if (status.state === "success" /* DeploymentStatus.Success */) {
-            return status;
-        }
-        else {
-            if (options.allow_inactive) {
-                throw new DeploymentStatusError(`No status available that had a state of "success" or "inactive", instead received state "${status.state}"`);
-            }
-            else {
-                throw new DeploymentStatusError(`No status available that had a state of "success", instead received state "${status.state}"`);
-            }
-        }
-    });
-}
-
-;// CONCATENATED MODULE: ./src/health-check.ts
-var health_check_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
-function getResource(request) {
-    return health_check_awaiter(this, void 0, void 0, function* () {
-        const response = yield fetch(request);
-        if (!response.ok) {
-            throw new Error(`Health check failed - response not OK, statusCode: ${response.statusText}`);
-        }
-        // Any status code that is not SUCCESS or a REDIRECT should be considered as a failure
-        const statusCode = response.status;
-        if (statusCode > 200 && statusCode < 302) {
-            throw new Error(`Health check failed - statusCode: ${response.statusText}`);
-        }
-        return response;
-    });
-}
-function healthCheck(_a) {
-    return health_check_awaiter(this, arguments, void 0, function* ({ url, vercel_bypass_secret }) {
-        try {
-            const headers = new Headers();
-            // Add the necessary header in order to bypass the deployment protection of Vercel
-            if (vercel_bypass_secret) {
-                headers.append('x-vercel-protection-bypass', vercel_bypass_secret);
-            }
-            const request = new Request(url, {
-                headers,
-            });
-            return yield getResource(request);
-        }
-        catch (error) {
-            console.log('Error in health check', error.message);
-            throw error;
-        }
-    });
-}
-
-;// CONCATENATED MODULE: ./src/log.ts
-/**
- * Warn the user that a function is deprecated
- */
-function deprecated(fn, replace) {
-    if (replace) {
-        console.warn('%s is deprecated and will be removed in future version, replace with %s', fn, replace);
-    }
-    else {
-        console.warn('%s is deprecated and will be removed in future version', fn);
-    }
-}
-
-;// CONCATENATED MODULE: ./src/action.ts
-var action_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
-
-
-
-
-
-
-
-
-
-function runAction() {
-    return action_awaiter(this, void 0, void 0, function* () {
-        try {
-            /**
-             * Github token - given by the GitHub environment
-             */
-            const GITHUB_TOKEN = (0,core.getInput)('token', { required: true });
-            /**
-             * A secret to bypass the Vercel protection of the deployment
-             * @docs {@link https://vercel.com/docs/security/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation}
-             */
-            const VERCEL_PROTECTION_BYPASS_SECRET = (0,core.getInput)('vercel_protection_bypass_secret');
-            /**
-             * The deployment environment to check
-             * @default "Preview"
-             */
-            const ENVIRONMENT = (0,core.getInput)('environment') || 'Preview';
-            /**
-             * Weather or not to allow inactive deployments as a valid deployment
-             */
-            const ALLOW_INACTIVE = Boolean((0,core.getInput)('allow_inactive')) || false;
-            /**
-             * A path on the deployment URL to run the health check on
-             */
-            const PATH = (0,core.getInput)('path') || '';
-            /**
-             * The maximum number of attempts to retry
-             * @default 20
-             */
-            const MAX_RETRY_ATTEMPTS = Number((0,core.getInput)('max_attempts')) || 20;
-            /**
-             * The interval between each retry attempt (defined in seconds)
-             * @default 30s
-             */
-            const RETRY_INTERVAL = Number((0,core.getInput)('retry_interval')) || 30;
-            /**
-             * The name of the actor that created the deployment
-             * @default vercel[bot]
-             */
-            const CREATOR_NAME = (0,core.getInput)('deployment_creator_name') || 'vercel[bot]';
-            const defaultMaxTimeout = 60;
-            /**
-             * @deprecated use max_attempts instead to control the retry policy
-             */
-            const MAX_TIMEOUT = Number((0,core.getInput)('max_timeout')) || defaultMaxTimeout;
-            if (MAX_TIMEOUT !== defaultMaxTimeout) {
-                deprecated('max_timeout', 'max_attempts');
-            }
-            const checkIntervalDefaultValue = 2 * 1000;
-            /**
-             * @deprecated use retry_interval instead to control the retry policy
-             */
-            const CHECK_INTERVAL_IN_MS = Number((0,core.getInput)('check_interval')) * 1000 || checkIntervalDefaultValue;
-            if (CHECK_INTERVAL_IN_MS !== checkIntervalDefaultValue) {
-                deprecated('check_interval', 'max_attempts');
-            }
-            /**
-             * @deprecated use VERCEL_PROTECTION_BYPASS_SECRET instead
-             */
-            const VERCEL_PASSWORD = (0,core.getInput)('vercel_password');
-            if (VERCEL_PASSWORD) {
-                deprecated('vercel_password', 'vercel_protection_bypass_secret');
-            }
-            /**
-             * @deprecated use VERCEL_PROTECTION_BYPASS_SECRET instead
-             */
-            const VERCEL_PROTECTION_BYPASS_HEADER = (0,core.getInput)('vercel_protection_bypass_header');
-            if (VERCEL_PROTECTION_BYPASS_HEADER) {
-                deprecated('vercel_password', 'vercel_protection_bypass_secret');
-            }
-            /**
-             * The retry policy for the all the different requests
-             * @remarks
-             * We generate an array of backoff intervals that will be used to retry the requests based on the number of MAX_RETRY_ATTEMPTS
-             * for each attempt we add 30 seconds to the backoff interval.
-             * E.g. if MAX_RETRY_ATTEMPTS is 5, the backoff intervals will be [0, 30000, 60000, 90000, 120000]
-             */
-            const backoffIntervals = generateBackoffIntervals(MAX_RETRY_ATTEMPTS - 1, RETRY_INTERVAL);
-            const backoff = new dist.IterableBackoff(backoffIntervals);
-            const retryPolicy = (0,dist.retry)(dist.handleAll, { maxAttempts: MAX_RETRY_ATTEMPTS - 1, backoff });
-            /**
-             * Check if required fields are provided
-             */
-            if (!GITHUB_TOKEN) {
-                (0,core.setFailed)('Required field "token" was not provided');
-                return;
-            }
-            /**
-             * Setup Octokit and our contextual information
-             */
-            const octokit = (0,github.getOctokit)(GITHUB_TOKEN, {
-                request: fetch,
-            });
-            const { owner, repo } = github.context.repo;
-            const { pull_request } = github.context.payload;
-            if (!pull_request) {
-                (0,core.setFailed)('This action is only supported on pull_request events. Exiting...');
-                return;
-            }
-            const pull_request_number = pull_request.number;
-            if (!pull_request_number) {
-                (0,core.setFailed)('Unable to determine pull request number from context. Exiting...');
-                return;
-            }
-            /**
-             * Stage 1 - Find the pull request
-             */
-            const pullRequest = yield retryPolicy.execute(({ attempt }) => {
-                console.log(`Stage 1 – Attempt %d/%d to get information about pull request "%d"`, attempt + 1, MAX_RETRY_ATTEMPTS, pull_request_number);
-                return findPullRequest({
-                    client: octokit,
-                    owner,
-                    repo,
-                    pr_number: pull_request_number,
-                });
-            });
-            const sha = pullRequest.head.sha;
-            if (!pullRequest.head.sha) {
-                (0,core.setFailed)('The pull request does not have a head sha, this is required to find the deployment. Exiting...');
-                return;
-            }
-            console.log('Found pull request with title "%s" and sha "%s"', pullRequest.title, sha);
-            /**
-             * Stage 1 - Find a deployment for the given owner/repo/sha/environment/actor
-             */
-            const foundDeployment = yield retryPolicy.execute(({ attempt }) => {
-                console.log(`Stage 2 – Attempt %d/%d to find deployment with sha "%s", environment "%s" and deployment_creator_name "%s"`, attempt + 1, MAX_RETRY_ATTEMPTS, sha, ENVIRONMENT, CREATOR_NAME);
-                return findDeployment({
-                    client: octokit,
-                    owner,
-                    repo,
-                    sha: sha,
-                    environment: ENVIRONMENT,
-                    creatorName: CREATOR_NAME,
-                });
-            });
-            if (!foundDeployment) {
-                (0,core.setFailed)(`No deployment found that matched either sha "${sha}", environment "${ENVIRONMENT}" or creator of deployment "${CREATOR_NAME}", exiting...`);
-                return;
-            }
-            console.log('Found deployment with id "%d" and description "%s"', foundDeployment === null || foundDeployment === void 0 ? void 0 : foundDeployment.id, foundDeployment.description);
-            /**
-             * Stage 2 - Wait for the given deployment to get a state of either "success" or "inactive" if allow_inactve is set to true
-             */
-            const deployment = yield retryPolicy.execute(({ attempt }) => {
-                console.log(`Stage 3 – Attempt %d/%d to find a deployment with status of "success"`, attempt + 1, MAX_RETRY_ATTEMPTS);
-                return findSuccessfulDeployment({
-                    client: octokit,
-                    owner,
-                    repo,
-                    deployment_id: foundDeployment.id,
-                    allow_inactive: ALLOW_INACTIVE,
-                });
-            });
-            if (!deployment) {
-                (0,core.setFailed)('No deployment found that was either successful or inactive (applicable only if allow_inactive is set to true)');
-                return;
-            }
-            else if (!deployment.log_url) {
-                (0,core.setFailed)(`no target_url found in the status check`);
-                return;
-            }
-            console.log('Found deployment with log_url', deployment.log_url);
-            /**
-             * Stage 3 - Perform a health check on the deployment URL
-             */
-            const healthCheckUrl = deployment.log_url + PATH;
-            const isOk = yield retryPolicy.execute(({ attempt }) => {
-                console.log('Stage 4 - Attempt %d/%d to perform health check for url "%s"', attempt + 1, MAX_RETRY_ATTEMPTS, healthCheckUrl);
-                return healthCheck({
-                    url: healthCheckUrl,
-                    vercel_bypass_secret: VERCEL_PROTECTION_BYPASS_SECRET,
-                });
-            });
-            if (!isOk) {
-                (0,core.setFailed)(`Health check failed for url: "%s" - make sure that you either provide a bypass secret or turn off deployment protection`);
-                return;
-            }
-            // ALL GOOD!
-            (0,core.setOutput)('url', healthCheckUrl);
-            console.log('Health check passed for url "%s"', healthCheckUrl);
-            return;
-        }
-        catch (error) {
-            (0,core.setFailed)(error.message);
-        }
-    });
-}
-
-;// CONCATENATED MODULE: ./src/index.ts
-
-runAction();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const action_1 = __nccwpck_require__(3332);
+(0, action_1.runAction)();
 
 })();
 

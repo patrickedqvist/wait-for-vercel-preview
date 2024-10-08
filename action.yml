@@ -7,35 +7,65 @@ inputs:
   token:
     description: 'The Github Secret'
     required: true
-  max_timeout:
-    description: 'The max time to run the action'
-    required: false
+
   environment:
-    description: 'The name of the environment that was deployed to (e.g., staging or production)'
+    description: 'The name of the environment that was deployed to (e.g., Preview, staging or production)'
     required: false
+    default: 'Preview'
+
+  deployment_creator_name:
+    description: 'The name of the user who created the deployment'
+    required: false
+    default: 'vercel[bot]'
+
+  vercel_protection_bypass_secret:
+    description: 'Vercel protection bypass for automation'
+    required: false
+
   allow_inactive:
     description: 'Use the most recent inactive deployment (previously deployed preview) associated with the pull request if no new deployment is available.'
     required: false
+
+  path:
+    description: 'The relative path to run the health check on, useful if you want to check a specific route'
+    default: ''
+    required: false
+
+  max_attempts:
+    description: 'The number of retry attempts for each stage (1. lookup PR, 2. find deployment, 3. lookup deployment status, 4. health check) to do before failing'
+    required: false
+    default: '20'
+
+  retry_interval:
+    description: 'The number of seconds to wait between retry attempts'
+    required: false
+    default: '30'
+
+  max_timeout:
+    description: 'The max time to run the action'
+    required: false
+    deprecationMessage: 'max_timeout is deprecated and will be removed in a future release. Please use the `max_attempts` & `retry_interval` in your workflow file instead.'
+
   check_interval:
     description: 'How often (in seconds) should we make the HTTP request checking to see if the deployment is available?'
     default: '2'
     required: false
+    deprecationMessage: 'check_interval is deprecated and will be removed in a future release. Please use the `max_attempts` & `retry_interval` in your workflow file instead.'
+
   vercel_password:
     description: 'Vercel password protection secret'
     required: false
+    deprecationMessage: 'vercel_password is deprecated and will be removed in a future release. Please use the `vercel_protection_bypass_secret` in your workflow file instead.'
+
   vercel_protection_bypass_header:
     description: 'Vercel protection bypass for automation'
     required: false
-  path:
-    description: 'The path to check. Defaults to the index of the domain'
-    default: '/'
-    required: false
+    deprecationMessage: 'vercel_protection_bypass_header is deprecated and will be removed in a future release. Please use the `vercel_protection_bypass_secret` in your workflow file instead.'
 
 outputs:
   url:
     description: 'The fully qualified deploy preview URL'
-  vercel_jwt:
-    description: 'If the deployment is using password protection, this will be a JWT. Otherwise, outputs an empty string'
+
 runs:
   using: 'node20'
   main: 'dist/index.js'

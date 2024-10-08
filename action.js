@@ -129,6 +129,7 @@ const waitForStatus = async ({
   maxTimeout,
   allowInactive,
   checkIntervalInMilliseconds,
+  actorName = 'vercel[bot]',
 }) => {
   const octokit = new github.getOctokit(token);
   const iterations = calculateIterations(
@@ -144,7 +145,9 @@ const waitForStatus = async ({
         deployment_id,
       });
 
-      const status = statuses.data.length > 0 && statuses.data[0];
+      const status =
+        statuses.data.length > 0 &&
+        statuses.data.find((status) => status.creator.login === actorName);
 
       if (!status) {
         throw new StatusError('No status was available');
@@ -225,11 +228,26 @@ const waitForDeploymentToStart = async ({
         environment,
       });
 
-      const deployment =
-        deployments.data.length > 0 &&
-        deployments.data.find((deployment) => {
-          return deployment.creator.login === actorName;
+      let deployment = null;
+      for (let n = 0; n < deployments.data.length; n++) {
+        const d = deployments.data[n];
+        if (d.creator.login === actorName) {
+          deployment = d;
+          break;
+        }
+        const statuses = await octokit.rest.repos.listDeploymentStatuses({
+          owner,
+          repo,
+          deployment_id: d.id,
         });
+        if (
+          statuses.data.length > 0 &&
+          statuses.data.find((status) => status.creator.login === actorName)
+        ) {
+          deployment = d;
+          break;
+        }
+      }
 
       if (deployment) {
         return deployment;
@@ -352,6 +370,7 @@ const run = async () => {
       maxTimeout: MAX_TIMEOUT,
       allowInactive: ALLOW_INACTIVE,
       checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,
+      actorName: 'vercel[bot]',
     });
 
     // Get target url

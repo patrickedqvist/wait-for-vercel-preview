@@ -33093,8 +33093,52 @@ const generateBackoffIntervals = (maxAttempts, intervalSeconds = 30) => {
     });
 };
 
-;// CONCATENATED MODULE: ./src/find-deployment.ts
+;// CONCATENATED MODULE: ./src/find-pull-request.ts
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+/**
+ * Retrieves the SHA of the head commit for a given pull request.
+ *
+ * @remarks
+ * This function uses the GitHub Octokit API to fetch information about a specific pull request
+ * and extract the SHA of its head commit. It's useful for getting the latest commit reference
+ * associated with a pull request.
+ *
+ * It requires at least one of the following permission sets:
+ * - "Pull requests" repository permissions (read)
+ * - "Contents" repository permissions (read)
+ *
+ * @throws Throws an error if no PR number is provided or if the API request fails.
+ * @returns A promise that resolves to the SHA of the pull request's head commit.
+ */
+function findPullRequest(_a) {
+    return __awaiter(this, arguments, void 0, function* ({ client, owner, repo, pr_number }) {
+        try {
+            const response = yield client.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: pr_number,
+            });
+            if (response.status !== 200) {
+                throw new Error(`Failed to get pull request information for PR number: ${pr_number}`);
+            }
+            return response.data;
+        }
+        catch (error) {
+            throw error;
+        }
+    });
+}
+
+;// CONCATENATED MODULE: ./src/find-deployment.ts
+var find_deployment_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -33114,7 +33158,7 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
  * @returns A promise that resolves to the deployment
  */
 function findDeployment(_a) {
-    return __awaiter(this, arguments, void 0, function* ({ client, owner, repo, sha, environment, creatorName }) {
+    return find_deployment_awaiter(this, arguments, void 0, function* ({ client, owner, repo, sha, environment, creatorName, }) {
         var _b;
         try {
             const deployments = yield client.rest.repos.listDeployments({
@@ -33274,6 +33318,7 @@ var action_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _a
 
 
 
+
 function runAction() {
     return action_awaiter(this, void 0, void 0, function* () {
         try {
@@ -33368,16 +33413,39 @@ function runAction() {
                 request: fetch,
             });
             const { owner, repo } = github.context.repo;
-            const { sha } = github.context;
-            if (!sha) {
-                (0,core.setFailed)('Unable to determine SHA from context. Exiting... Make sure that the action is running on a pull_request event.');
+            const { pull_request } = github.context.payload;
+            if (!pull_request) {
+                (0,core.setFailed)('This action is only supported on pull_request events. Exiting...');
                 return;
             }
+            const pull_request_number = pull_request.number;
+            if (!pull_request_number) {
+                (0,core.setFailed)('Unable to determine pull request number from context. Exiting...');
+                return;
+            }
+            /**
+             * Stage 1 - Find the pull request
+             */
+            const pullRequest = yield retryPolicy.execute(({ attempt }) => {
+                console.log(`Stage 1 – Attempt %d/%d to get information about the pull request "%d"`, attempt + 1, MAX_RETRY_ATTEMPTS, pull_request_number);
+                return findPullRequest({
+                    client: octokit,
+                    owner,
+                    repo,
+                    pr_number: pull_request_number,
+                });
+            });
+            const sha = pullRequest.head.sha;
+            if (!pullRequest.head.sha) {
+                (0,core.setFailed)('The pull request does not have a head sha, this is required to find the deployment. Exiting...');
+                return;
+            }
+            console.log('Found pull request with title "%s" and sha "%s"', pullRequest.title, sha);
             /**
              * Stage 1 - Find a deployment for the given owner/repo/sha/environment/actor
              */
             const foundDeployment = yield retryPolicy.execute(({ attempt }) => {
-                console.log(`Stage 1 – Attempt %d/%d to find deployment with environment "%s" and deployment.creator.login "%s"`, attempt + 1, MAX_RETRY_ATTEMPTS, ENVIRONMENT, CREATOR_NAME);
+                console.log(`Stage 2 – Attempt %d/%d to find deployment with environment "%s" and deployment.creator.login "%s"`, attempt + 1, MAX_RETRY_ATTEMPTS, ENVIRONMENT, CREATOR_NAME);
                 return findDeployment({
                     client: octokit,
                     owner,
@@ -33396,7 +33464,7 @@ function runAction() {
              * Stage 2 - Wait for the given deployment to get a state of either "success" or "inactive" if allow_inactve is set to true
              */
             const deployment = yield retryPolicy.execute(({ attempt }) => {
-                console.log(`Stage 2 – Attempt %d/%d to find a deployment with status of "success"`, attempt + 1, MAX_RETRY_ATTEMPTS);
+                console.log(`Stage 3 – Attempt %d/%d to find a deployment with status of "success"`, attempt + 1, MAX_RETRY_ATTEMPTS);
                 return findSuccessfulDeployment({
                     client: octokit,
                     owner,
@@ -33419,7 +33487,7 @@ function runAction() {
              */
             const healthCheckUrl = deployment.log_url + PATH;
             const isOk = yield retryPolicy.execute(({ attempt }) => {
-                console.log('Stage 3 - Attempt %d/%d to perform health check for url "%s"', attempt + 1, MAX_RETRY_ATTEMPTS, healthCheckUrl);
+                console.log('Stage 4 - Attempt %d/%d to perform health check for url "%s"', attempt + 1, MAX_RETRY_ATTEMPTS, healthCheckUrl);
                 return healthCheck({
                     url: healthCheckUrl,
                     vercel_bypass_secret: VERCEL_PROTECTION_BYPASS_SECRET,

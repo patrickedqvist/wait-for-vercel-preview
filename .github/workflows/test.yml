@@ -13,21 +13,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          fetch-depth: 0
+          node-version: lts/*
 
-      - name: npm-cache
-        uses: actions/cache@v3
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ env.cache-name }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-${{ env.cache-name }}
-            ${{ runner.os }}-node
-
-      - name: install
-        run: npm ci
+      - name: Install dependencies
+        run: npm install -g pnpm && pnpm install
 
       - name: test
-        run: npm run test:ci:coverage
+        run: pnpm test

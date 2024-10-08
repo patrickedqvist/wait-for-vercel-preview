@@ -54,6 +54,26 @@ Optional — Vercel password protection secret. This input is deprecated and wil
 
 Optional — Vercel protection bypass for automation. This input is deprecated and will be removed in a future release. Please use `vercel_protection_bypass_secret` instead.
 
+## Necessary Privileges
+
+To use this action, you need to ensure that your GitHub workflow has the necessary permissions to interact with the GitHub API and access deployment information. Here's what you need to do:
+
+1. **GitHub Token**: The action requires the `GITHUB_TOKEN` secret to authenticate API requests. This token is automatically provided by GitHub Actions, but you need to pass it explicitly to the action.
+
+2. **Permissions**: Your workflow needs `read` permissions for `pull-requests` and `deployments`. You can either provide the `GITHUB_TOKEN` by changing the repository settings for actions or set fine-grained permissions in the workflow file.
+
+You can set these permissions in your workflow file like this:
+
+```yaml
+permissions:
+  pull-requests: read
+  deployments: read
+```
+
+By setting up these permissions correctly, you allow the action to fetch information about pull requests and deployments, which is crucial for its operation.
+
+Read more at [Controlling permissions for GITHUB_TOKEN](https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/controlling-permissions-for-github_token)
+
 ## Outputs
 
 ### `url`

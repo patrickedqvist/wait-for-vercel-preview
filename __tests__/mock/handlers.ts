@@ -1,4 +1,5 @@
 import { http, HttpResponse } from 'msw';
+import GetPullRequestResponse from './fixtures/get-pull-request.json';
 import ListDeploymentsResponse from './fixtures/list-deployments.json';
 import ListDeploymentStatusesResponse from './fixtures/list-deployment-statuses.json';
 
@@ -6,6 +7,15 @@ const ApiUrl = 'https://api.github.com/repos/:owner/:repo';
 const PreviewUrl = 'https://example.com/deployment/42/output';
 
 export const handlers = [
+  http.get(`${ApiUrl}/pulls/:pull_number`, async ({ params }) => {
+    if (Number(params.pull_number) === 1) {
+      return HttpResponse.json(GetPullRequestResponse);
+    }
+
+    return new HttpResponse('Not Found', {
+      status: 404,
+    });
+  }),
   http.get(`${ApiUrl}/deployments`, async ({ params, request }) => {
     const url = new URL(request.url);
 

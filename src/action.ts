@@ -2,6 +2,7 @@ import { getInput, setFailed, setOutput } from '@actions/core';
 import { getOctokit, context } from '@actions/github';
 import { handleAll, retry, IterableBackoff } from 'cockatiel';
 import { generateBackoffIntervals } from './generate-backoff-intervals';
+import { findPullRequest } from './find-pull-request';
 import { findDeployment } from './find-deployment';
 import { findSuccessfulDeployment } from './find-successful-deployment';
 import { healthCheck } from './health-check';
@@ -114,21 +115,53 @@ export async function runAction() {
       request: fetch,
     });
     const { owner, repo } = context.repo;
-    const { sha } = context;
+    const { pull_request } = context.payload;
 
-    if (!sha) {
-      setFailed(
-        'Unable to determine SHA from context. Exiting... Make sure that the action is running on a pull_request event.'
-      );
+    if (!pull_request) {
+      setFailed('This action is only supported on pull_request events. Exiting...');
       return;
     }
+
+    const pull_request_number = pull_request.number;
+
+    if (!pull_request_number) {
+      setFailed('Unable to determine pull request number from context. Exiting...');
+      return;
+    }
+
+    /**
+     * Stage 1 - Find the pull request
+     */
+    const pullRequest = await retryPolicy.execute(({ attempt }) => {
+      console.log(
+        `Stage 1 – Attempt %d/%d to get information about the pull request "%d"`,
+        attempt + 1,
+        MAX_RETRY_ATTEMPTS,
+        pull_request_number
+      );
+      return findPullRequest({
+        client: octokit,
+        owner,
+        repo,
+        pr_number: pull_request_number,
+      });
+    });
+
+    const sha = pullRequest.head.sha;
+
+    if (!pullRequest.head.sha) {
+      setFailed('The pull request does not have a head sha, this is required to find the deployment. Exiting...');
+      return;
+    }
+
+    console.log('Found pull request with title "%s" and sha "%s"', pullRequest.title, sha);
 
     /**
      * Stage 1 - Find a deployment for the given owner/repo/sha/environment/actor
      */
     const foundDeployment = await retryPolicy.execute(({ attempt }) => {
       console.log(
-        `Stage 1 – Attempt %d/%d to find deployment with environment "%s" and deployment.creator.login "%s"`,
+        `Stage 2 – Attempt %d/%d to find deployment with environment "%s" and deployment.creator.login "%s"`,
         attempt + 1,
         MAX_RETRY_ATTEMPTS,
         ENVIRONMENT,
@@ -158,7 +191,7 @@ export async function runAction() {
      */
     const deployment = await retryPolicy.execute(({ attempt }) => {
       console.log(
-        `Stage 2 – Attempt %d/%d to find a deployment with status of "success"`,
+        `Stage 3 – Attempt %d/%d to find a deployment with status of "success"`,
         attempt + 1,
         MAX_RETRY_ATTEMPTS
       );
@@ -189,7 +222,7 @@ export async function runAction() {
     const healthCheckUrl = deployment.log_url + PATH;
     const isOk = await retryPolicy.execute(({ attempt }) => {
       console.log(
-        'Stage 3 - Attempt %d/%d to perform health check for url "%s"',
+        'Stage 4 - Attempt %d/%d to perform health check for url "%s"',
         attempt + 1,
         MAX_RETRY_ATTEMPTS,
         healthCheckUrl

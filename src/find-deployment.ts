@@ -23,6 +23,20 @@ interface FindDeploymentOptions extends GithubRequestParameters {
 }
 
 /**
+ * The response from the findDeployment function
+ * @remarks
+ * The full response can be found at {@link https://docs.github.com/en/rest/deployments/deployments#list-deployments}
+ */
+interface FindDeploymentResponse {
+  id: number;
+  description: string | null;
+  environment: string;
+  creator?: {
+    login: string;
+  };
+}
+
+/**
  * Finds a Github deployment
  *
  * @remarks
@@ -32,7 +46,14 @@ interface FindDeploymentOptions extends GithubRequestParameters {
  * @throws If no deployments are available or if no deployment matches the passed creatorName to creator.login.name
  * @returns A promise that resolves to the deployment
  */
-export async function findDeployment({ client, owner, repo, sha, environment, creatorName }: FindDeploymentOptions) {
+export async function findDeployment({
+  client,
+  owner,
+  repo,
+  sha,
+  environment,
+  creatorName,
+}: FindDeploymentOptions): Promise<FindDeploymentResponse> {
   try {
     const deployments = await client.rest.repos.listDeployments({
       owner,

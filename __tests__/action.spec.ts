@@ -11,6 +11,7 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterAll(() => server.close());
 // Reset handlers after each test `important for test isolation`
 afterEach(() => {
+  setGithubContext({});
   vi.resetAllMocks();
   server.resetHandlers();
 });
@@ -43,17 +44,19 @@ describe('wait for vercel preview', () => {
     expect(core.setFailed).toBeCalledWith('Required field "token" was not provided');
   });
 
-  it('should exit if no SHA is available from the context', async () => {
+  it('should exit if no pr_number is available from the context', async () => {
     setInputs({
       token: 'a-token',
     });
     setGithubContext({
-      sha: '',
+      payload: {
+        pull_request: {
+          number: undefined,
+        },
+      },
     });
     await runAction();
-    expect(core.setFailed).toHaveBeenCalledWith(
-      'Unable to determine SHA from context. Exiting... Make sure that the action is running on a pull_request event.'
-    );
+    expect(core.setFailed).toHaveBeenCalledWith('Unable to determine pull request number from context. Exiting...');
   });
 
   it('should exit if there is no deployment with status "success"', async () => {
@@ -64,12 +67,9 @@ describe('wait for vercel preview', () => {
       max_attempts: 3,
       retry_interval: 1,
     });
-    setGithubContext({
-      sha: 'b7d4d3f8c9e2a1f0d6b5c4a3e2d1f0b9a8c7d6e5',
-    });
     await runAction();
     expect(core.setFailed).toHaveBeenCalledWith(
-      'No status available that had a state of "success", instead received state "in-progress"'
+      'No deployment found that matched the deployment.creator.login name "octofail" and environment "production" for the sha "a84d88e7554fc1fa21bcbc4efae3c782a70d2b9d", instead latest deployment was created by "octocat" with environment "production"'
     );
   });
 
@@ -79,9 +79,6 @@ describe('wait for vercel preview', () => {
       deployment_creator_name: 'octocat',
       environment: 'production',
       max_attempts: 3,
-    });
-    setGithubContext({
-      sha: 'a84d88e7554fc1fa21bcbc4efae3c782a70d2b9d',
     });
     await runAction();
     expect(core.setFailed).not.toHaveBeenCalled();
@@ -96,9 +93,6 @@ describe('wait for vercel preview', () => {
       vercel_protection_bypass_secret: 'my-secret-bypass-token',
       path: '/protected',
       max_attempts: 3,
-    });
-    setGithubContext({
-      sha: 'a84d88e7554fc1fa21bcbc4efae3c782a70d2b9d',
     });
     await runAction();
     expect(core.setFailed).not.toHaveBeenCalled();
@@ -140,37 +134,31 @@ function setInputs(inputs: SetInputsOptions = {}) {
   });
 }
 
-function setGithubContext(ctx) {
-  const defaultCtx = {
-    eventName: '',
-    sha: '',
-    ref: '',
-    workflow: '',
-    action: '',
-    actor: '',
-    job: '',
-    runId: 123,
-    runNumber: 123,
-    apiUrl: '',
-    serverUrl: '',
-    graphqlUrl: '',
-    issue: {
-      owner: 'octocat',
-      repo: 'example',
-      number: 345,
-    },
+interface GithubContext {
+  repo: {
+    owner: string;
+    repo: string;
+  };
+  payload: {
+    pull_request?: {
+      number?: number;
+    };
+  };
+}
+
+function setGithubContext(ctx: Partial<GithubContext>) {
+  const defaultCtx: GithubContext = {
     repo: {
       owner: 'octocat',
       repo: 'example',
     },
     payload: {
       pull_request: {
-        number: undefined,
+        number: 1,
       },
     },
   };
 
-  // ts-check complains about assigning to a read-only property
-  // @ts-ignore
+  // @ts-expect-error - we are assigning to a read-only property
   github.context = assign(defaultCtx, ctx);
 }

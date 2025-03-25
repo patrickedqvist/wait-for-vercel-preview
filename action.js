@@ -42,7 +42,7 @@ const waitForUrl = async ({
 
       if (protectionBypassHeader) {
         headers = {
-          'x-vercel-protection-bypass': protectionBypassHeader
+          'x-vercel-protection-bypass': protectionBypassHeader,
         };
       }
 
@@ -210,6 +210,7 @@ const waitForDeploymentToStart = async ({
   actorName = 'vercel[bot]',
   maxTimeout = 20,
   checkIntervalInMilliseconds = 2000,
+  projectFilter,
 }) => {
   const iterations = calculateIterations(
     maxTimeout,
@@ -228,7 +229,12 @@ const waitForDeploymentToStart = async ({
       const deployment =
         deployments.data.length > 0 &&
         deployments.data.find((deployment) => {
-          return deployment.creator.login === actorName;
+          const matchesActor = deployment.creator.login === actorName;
+          const matchesFilter =
+            !projectFilter ||
+            (deployment.name && deployment.name.includes(projectFilter)) ||
+            (deployment.url && deployment.url.includes(projectFilter));
+          return matchesActor && matchesFilter;
         });
 
       if (deployment) {
@@ -240,14 +246,14 @@ const waitForDeploymentToStart = async ({
           i + 1
         } / ${iterations})`
       );
-    } catch(e) {
+    } catch (e) {
       console.log(
         `Error while fetching deployments, retrying (attempt ${
           i + 1
         } / ${iterations})`
       );
 
-      console.error(e)
+      console.error(e);
     }
 
     await wait(checkIntervalInMilliseconds);
@@ -287,11 +293,14 @@ const run = async () => {
     // Inputs
     const GITHUB_TOKEN = core.getInput('token', { required: true });
     const VERCEL_PASSWORD = core.getInput('vercel_password');
-    const VERCEL_PROTECTION_BYPASS_HEADER = core.getInput('vercel_protection_bypass_header');
+    const VERCEL_PROTECTION_BYPASS_HEADER = core.getInput(
+      'vercel_protection_bypass_header'
+    );
     const ENVIRONMENT = core.getInput('environment');
     const MAX_TIMEOUT = Number(core.getInput('max_timeout')) || 60;
     const ALLOW_INACTIVE = Boolean(core.getInput('allow_inactive')) || false;
     const PATH = core.getInput('path') || '/';
+    const PROJECT_FILTER = core.getInput('project_filter');
     const CHECK_INTERVAL_IN_MS =
       (Number(core.getInput('check_interval')) || 2) * 1000;
 
@@ -337,6 +346,7 @@ const run = async () => {
       actorName: 'vercel[bot]',
       maxTimeout: MAX_TIMEOUT,
       checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,
+      projectFilter: PROJECT_FILTER,
     });
 
     if (!deployment) {

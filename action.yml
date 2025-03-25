@@ -30,6 +30,9 @@ inputs:
     description: 'The path to check. Defaults to the index of the domain'
     default: '/'
     required: false
+  project_filter:
+    description: 'Optional filter for deployment project name or URL substring'
+    required: false
 
 outputs:
   url:

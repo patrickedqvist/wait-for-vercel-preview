@@ -31,8 +31,9 @@ inputs:
     default: '/'
     required: false
   project_filter:
-    description: 'Optional filter for deployment project name or URL substring'
+    description: 'Optional. If set, will wait for the first deployment whose preview URL includes this string'
     required: false
+
 
 outputs:
   url:

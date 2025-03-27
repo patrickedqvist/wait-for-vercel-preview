@@ -42,7 +42,7 @@ const waitForUrl = async ({
 
       if (protectionBypassHeader) {
         headers = {
-          'x-vercel-protection-bypass': protectionBypassHeader
+          'x-vercel-protection-bypass': protectionBypassHeader,
         };
       }
 
@@ -210,6 +210,9 @@ const waitForDeploymentToStart = async ({
   actorName = 'vercel[bot]',
   maxTimeout = 20,
   checkIntervalInMilliseconds = 2000,
+  projectFilter,
+  token,
+  allowInactive,
 }) => {
   const iterations = calculateIterations(
     maxTimeout,
@@ -225,13 +228,32 @@ const waitForDeploymentToStart = async ({
         environment,
       });
 
-      const deployment =
-        deployments.data.length > 0 &&
-        deployments.data.find((deployment) => {
-          return deployment.creator.login === actorName;
+      for (const deployment of deployments.data) {
+        if (deployment.creator.login !== actorName) continue;
+
+        const status = await waitForStatus({
+          token,
+          owner,
+          repo,
+          deployment_id: deployment.id,
+          maxTimeout,
+          allowInactive,
+          checkIntervalInMilliseconds,
         });
 
-      if (deployment) {
+        const targetUrl = status?.target_url;
+
+        if (!targetUrl) continue;
+
+        if (projectFilter && !targetUrl.includes(projectFilter)) {
+          console.log(
+            `⏩ Skipping URL: ${targetUrl} (does not match project_filter "${projectFilter}")`
+          );
+          continue;
+        }
+
+        console.log(`✅ Selected deployment URL: ${targetUrl}`);
+        deployment._resolvedTargetUrl = targetUrl;
         return deployment;
       }
 
@@ -240,14 +262,14 @@ const waitForDeploymentToStart = async ({
           i + 1
         } / ${iterations})`
       );
-    } catch(e) {
+    } catch (e) {
       console.log(
         `Error while fetching deployments, retrying (attempt ${
           i + 1
         } / ${iterations})`
       );
 
-      console.error(e)
+      console.error(e);
     }
 
     await wait(checkIntervalInMilliseconds);
@@ -255,6 +277,7 @@ const waitForDeploymentToStart = async ({
 
   return null;
 };
+
 
 async function getShaForPullRequest({ octokit, owner, repo, number }) {
   const PR_NUMBER = github.context.payload.pull_request.number;
@@ -287,11 +310,14 @@ const run = async () => {
     // Inputs
     const GITHUB_TOKEN = core.getInput('token', { required: true });
     const VERCEL_PASSWORD = core.getInput('vercel_password');
-    const VERCEL_PROTECTION_BYPASS_HEADER = core.getInput('vercel_protection_bypass_header');
+    const VERCEL_PROTECTION_BYPASS_HEADER = core.getInput(
+      'vercel_protection_bypass_header'
+    );
     const ENVIRONMENT = core.getInput('environment');
     const MAX_TIMEOUT = Number(core.getInput('max_timeout')) || 60;
     const ALLOW_INACTIVE = Boolean(core.getInput('allow_inactive')) || false;
     const PATH = core.getInput('path') || '/';
+    const PROJECT_FILTER = core.getInput('project_filter');
     const CHECK_INTERVAL_IN_MS =
       (Number(core.getInput('check_interval')) || 2) * 1000;
 
@@ -332,11 +358,14 @@ const run = async () => {
       octokit,
       owner,
       repo,
-      sha: sha,
+      sha,
       environment: ENVIRONMENT,
       actorName: 'vercel[bot]',
       maxTimeout: MAX_TIMEOUT,
       checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,
+      projectFilter: PROJECT_FILTER,
+      token: GITHUB_TOKEN,
+      allowInactive: ALLOW_INACTIVE,
     });
 
     if (!deployment) {
@@ -355,7 +384,7 @@ const run = async () => {
     });
 
     // Get target url
-    const targetUrl = status.target_url;
+    const targetUrl = deployment._resolvedTargetUrl || status.target_url;
 
     if (!targetUrl) {
       core.setFailed(`no target_url found in the status check`);

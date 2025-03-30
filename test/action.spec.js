@@ -11,6 +11,7 @@ jest.setTimeout(20000);
 jest.mock('@actions/core', () => {
   return {
     getInput: jest.fn(),
+    getBooleanInput: jest.fn(),
     setFailed: jest.fn(),
     setOutput: jest.fn(),
   };
@@ -410,23 +411,22 @@ describe('wait for vercel preview', () => {
  * @param {{
  *  token?: string,
  *  vercel_password?: string;
- *  allow_inactive?: boolean;
+ *  allow_inactive?: string;
  *  check_interval?: number;
  *  max_timeout?: number;
  *  path?: string;
  *  }} inputs
  */
 function setInputs(inputs = {}) {
-  const spy = jest.spyOn(core, 'getInput');
+  const spyGetInput = jest.spyOn(core, 'getInput');
+  const spyGetBooleanInput = jest.spyOn(core, 'getBooleanInput');
 
-  spy.mockImplementation((key) => {
+  spyGetInput.mockImplementation((key) => {
     switch (key) {
       case 'token':
         return inputs.token || '';
       case 'vercel_password':
         return inputs.vercel_password || '';
-      case 'allow_inactive':
-        return `${inputs.allow_inactive || ''}`;
       case 'check_interval':
         return `${inputs.check_interval || ''}`;
       case 'max_timeout':
@@ -435,6 +435,15 @@ function setInputs(inputs = {}) {
         return `${inputs.path || ''}`;
       default:
         return '';
+    }
+  });
+
+  spyGetBooleanInput.mockImplementation((key) => {
+    switch (key) {
+      case 'allow_inactive':
+        return String(inputs.allow_inactive).toLowerCase() === 'true';
+      default:
+        return false;
     }
   });
 }

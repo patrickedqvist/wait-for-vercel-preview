@@ -296,7 +296,7 @@ const run = async () => {
     const VERCEL_PROTECTION_BYPASS_HEADER = core.getInput('vercel_protection_bypass_header');
     const ENVIRONMENT = core.getInput('environment');
     const MAX_TIMEOUT = Number(core.getInput('max_timeout')) || 60;
-    const ALLOW_INACTIVE = Boolean(core.getInput('allow_inactive')) || false;
+    const ALLOW_INACTIVE = core.getBooleanInput('allow_inactive');
     const PATH = core.getInput('path') || '/';
     const CHECK_INTERVAL_IN_MS =
       (Number(core.getInput('check_interval')) || 2) * 1000;

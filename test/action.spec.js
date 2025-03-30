@@ -294,6 +294,115 @@ describe('wait for vercel preview', () => {
       'a-super-secret-jwt'
     );
   });
+
+  test('fails if allow_inactive is set to false but the only status is inactive', async () => {
+    setInputs({
+      token: 'a-token',
+      allow_inactive: 'false',
+      max_timeout: 5,
+      check_interval: 1,
+    });
+
+    setGithubContext({
+      payload: {
+        pull_request: {
+          number: 99,
+        },
+      },
+    });
+
+    ghResponse('/repos/gh-user/best-repo-ever/pulls/99', 200, {
+      head: {
+        sha: 'abcdef12345678',
+      },
+    });
+
+    ghResponse('/repos/gh-user/best-repo-ever/deployments', 200, [
+      {
+        id: 'fake-deployment-id',
+        creator: {
+          login: 'vercel[bot]',
+        },
+      },
+    ]);
+
+    ghResponse(
+        '/repos/gh-user/best-repo-ever/deployments/fake-deployment-id/statuses',
+        200,
+        [
+          {
+            state: 'inactive',
+            target_url: 'https://my-preview.vercel.app/',
+          },
+        ]
+    );
+
+    await run();
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+        'Timeout reached: Unable to wait for an deployment to be successful'
+    );
+  });
+
+  test('succeeds if allow_inactive is set to true and the only status is inactive', async () => {
+    setInputs({
+      token: 'a-token',
+      allow_inactive: 'true',
+      max_timeout: 5,
+      check_interval: 1,
+    });
+
+    setGithubContext({
+      payload: {
+        pull_request: {
+          number: 99,
+        },
+      },
+    });
+
+    ghResponse('/repos/gh-user/best-repo-ever/pulls/99', 200, {
+      head: {
+        sha: 'abcdef12345678',
+      },
+    });
+
+    ghResponse('/repos/gh-user/best-repo-ever/deployments', 200, [
+      {
+        id: 'fake-deployment-id',
+        creator: {
+          login: 'vercel[bot]',
+        },
+      },
+    ]);
+
+    ghResponse(
+        '/repos/gh-user/best-repo-ever/deployments/fake-deployment-id/statuses',
+        200,
+        [
+          {
+            state: 'inactive',
+            target_url: 'https://my-preview.vercel.app/',
+          },
+        ]
+    );
+
+    restTimes('https://my-preview.vercel.app/', [
+      {
+        status: 200,
+        body: 'OK!',
+        times: 1,
+      },
+    ]);
+
+    await run();
+
+    expect(core.setFailed).not.toHaveBeenCalled();
+
+    expect(core.setOutput).toHaveBeenCalledWith(
+        'url',
+        'https://my-preview.vercel.app/'
+    );
+  });
 });
 
 /**
@@ -301,6 +410,7 @@ describe('wait for vercel preview', () => {
  * @param {{
  *  token?: string,
  *  vercel_password?: string;
+ *  allow_inactive?: boolean;
  *  check_interval?: number;
  *  max_timeout?: number;
  *  path?: string;
@@ -315,6 +425,8 @@ function setInputs(inputs = {}) {
         return inputs.token || '';
       case 'vercel_password':
         return inputs.vercel_password || '';
+      case 'allow_inactive':
+        return `${inputs.allow_inactive || ''}`;
       case 'check_interval':
         return `${inputs.check_interval || ''}`;
       case 'max_timeout':

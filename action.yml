@@ -31,6 +31,10 @@ inputs:
     description: 'The path to check. Defaults to the index of the domain'
     default: '/'
     required: false
+  project_filter:
+    description: 'Optional. If set, will wait for the first deployment whose preview URL includes this string'
+    required: false
+
 
 outputs:
   url:

@@ -16,6 +16,7 @@ inputs:
   allow_inactive:
     description: 'Use the most recent inactive deployment (previously deployed preview) associated with the pull request if no new deployment is available.'
     required: false
+    default: 'false'
   check_interval:
     description: 'How often (in seconds) should we make the HTTP request checking to see if the deployment is available?'
     default: '2'

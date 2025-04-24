@@ -146,6 +146,16 @@ const waitForStatus = async ({
 
       const status = statuses.data.length > 0 && statuses.data[0];
 
+      if (status) {
+        console.log(
+          `🟡 Deployment status found: state="${status.state}" (ID: ${deployment_id})`
+        );
+      } else {
+        console.log(
+          `⚠️ No deployment status found yet for deployment ID: ${deployment_id}`
+        );
+      }
+
       if (!status) {
         throw new StatusError('No status was available');
       }

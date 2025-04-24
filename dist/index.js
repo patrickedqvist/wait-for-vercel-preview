@@ -48,7 +48,7 @@ const waitForUrl = async ({
 
       if (protectionBypassHeader) {
         headers = {
-          'x-vercel-protection-bypass': protectionBypassHeader
+          'x-vercel-protection-bypass': protectionBypassHeader,
         };
       }
 
@@ -152,6 +152,16 @@ const waitForStatus = async ({
 
       const status = statuses.data.length > 0 && statuses.data[0];
 
+      if (status) {
+        console.log(
+          `🟡 Deployment status found: state="${status.state}" (ID: ${deployment_id})`
+        );
+      } else {
+        console.log(
+          `⚠️ No deployment status found yet for deployment ID: ${deployment_id}`
+        );
+      }
+
       if (!status) {
         throw new StatusError('No status was available');
       }
@@ -216,11 +226,15 @@ const waitForDeploymentToStart = async ({
   actorName = 'vercel[bot]',
   maxTimeout = 20,
   checkIntervalInMilliseconds = 2000,
+  projectFilter,
+  token,
+  allowInactive,
 }) => {
   const iterations = calculateIterations(
     maxTimeout,
     checkIntervalInMilliseconds
   );
+  let lastMatchingDeployment = null;
 
   for (let i = 0; i < iterations; i++) {
     try {
@@ -231,32 +245,89 @@ const waitForDeploymentToStart = async ({
         environment,
       });
 
-      const deployment =
-        deployments.data.length > 0 &&
-        deployments.data.find((deployment) => {
-          return deployment.creator.login === actorName;
+      if (!deployments.data.length) {
+        console.log(`No deployments found for sha: ${sha}`);
+      }
+
+      for (const deployment of deployments.data) {
+        console.log(`🔍 Checking deployment ID: ${deployment.id}`);
+
+        if (deployment.creator.login !== actorName) {
+          console.log(
+            `⏭️ Skipping deployment ID ${deployment.id} — actor mismatch`
+          );
+          continue;
+        }
+
+        const status = await waitForStatus({
+          token,
+          owner,
+          repo,
+          deployment_id: deployment.id,
+          maxTimeout,
+          allowInactive,
+          checkIntervalInMilliseconds,
         });
 
-      if (deployment) {
+        const targetUrl = status?.target_url;
+
+        if (!targetUrl) {
+          console.log(
+            `⏭️ Skipping deployment ID ${deployment.id} — missing target_url`
+          );
+          continue;
+        }
+
+        if (projectFilter && !targetUrl.includes(projectFilter)) {
+          console.log(
+            `⏭️ Skipping URL: ${targetUrl} (does not match project_filter "${projectFilter}")`
+          );
+          continue;
+        }
+
+        console.log(`✅ Selected deployment URL: ${targetUrl}`);
+        deployment._resolvedTargetUrl = targetUrl;
         return deployment;
       }
 
+      const fallbackDeployment = deployments.data.find((deployment) => {
+        const matchesActor = deployment.creator.login === actorName;
+        const matchesFilter =
+          !projectFilter ||
+          deployment.payload?.meta?.projectName?.includes(projectFilter) ||
+          false;
+        return matchesActor && matchesFilter;
+      });
+
+      if (fallbackDeployment) {
+        console.log(
+          `🕒 Caching fallback deployment ID: ${fallbackDeployment.id}`
+        );
+        lastMatchingDeployment = fallbackDeployment;
+      }
+
       console.log(
-        `Could not find any deployments for actor ${actorName}, retrying (attempt ${
+        `No matching deployments for actor ${actorName} and filter "${projectFilter}", retrying (attempt ${
           i + 1
         } / ${iterations})`
       );
-    } catch(e) {
+    } catch (e) {
       console.log(
         `Error while fetching deployments, retrying (attempt ${
           i + 1
         } / ${iterations})`
       );
-
-      console.error(e)
+      console.error(e);
     }
 
     await wait(checkIntervalInMilliseconds);
+  }
+
+  if (lastMatchingDeployment) {
+    console.log(
+      `⚠️ Timeout fallback — returning last matching deployment ID: ${lastMatchingDeployment.id}`
+    );
+    return lastMatchingDeployment;
   }
 
   return null;
@@ -293,11 +364,14 @@ const run = async () => {
     // Inputs
     const GITHUB_TOKEN = core.getInput('token', { required: true });
     const VERCEL_PASSWORD = core.getInput('vercel_password');
-    const VERCEL_PROTECTION_BYPASS_HEADER = core.getInput('vercel_protection_bypass_header');
+    const VERCEL_PROTECTION_BYPASS_HEADER = core.getInput(
+      'vercel_protection_bypass_header'
+    );
     const ENVIRONMENT = core.getInput('environment');
     const MAX_TIMEOUT = Number(core.getInput('max_timeout')) || 60;
     const ALLOW_INACTIVE = core.getBooleanInput('allow_inactive');
     const PATH = core.getInput('path') || '/';
+    const PROJECT_FILTER = core.getInput('project_filter');
     const CHECK_INTERVAL_IN_MS =
       (Number(core.getInput('check_interval')) || 2) * 1000;
 
@@ -338,11 +412,14 @@ const run = async () => {
       octokit,
       owner,
       repo,
-      sha: sha,
+      sha,
       environment: ENVIRONMENT,
       actorName: 'vercel[bot]',
       maxTimeout: MAX_TIMEOUT,
       checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,
+      projectFilter: PROJECT_FILTER,
+      token: GITHUB_TOKEN,
+      allowInactive: ALLOW_INACTIVE,
     });
 
     if (!deployment) {
@@ -361,7 +438,7 @@ const run = async () => {
     });
 
     // Get target url
-    const targetUrl = status.target_url;
+    const targetUrl = deployment._resolvedTargetUrl || status.target_url;
 
     if (!targetUrl) {
       core.setFailed(`no target_url found in the status check`);

@@ -224,6 +224,7 @@ const waitForDeploymentToStart = async ({
     maxTimeout,
     checkIntervalInMilliseconds
   );
+  let lastMatchingDeployment = null;
 
   for (let i = 0; i < iterations; i++) {
     try {
@@ -234,8 +235,19 @@ const waitForDeploymentToStart = async ({
         environment,
       });
 
+      if (!deployments.data.length) {
+        console.log(`No deployments found for sha: ${sha}`);
+      }
+
       for (const deployment of deployments.data) {
-        if (deployment.creator.login !== actorName) continue;
+        console.log(`🔍 Checking deployment ID: ${deployment.id}`);
+
+        if (deployment.creator.login !== actorName) {
+          console.log(
+            `⏭️ Skipping deployment ID ${deployment.id} — actor mismatch`
+          );
+          continue;
+        }
 
         const status = await waitForStatus({
           token,
@@ -249,11 +261,16 @@ const waitForDeploymentToStart = async ({
 
         const targetUrl = status?.target_url;
 
-        if (!targetUrl) continue;
+        if (!targetUrl) {
+          console.log(
+            `⏭️ Skipping deployment ID ${deployment.id} — missing target_url`
+          );
+          continue;
+        }
 
         if (projectFilter && !targetUrl.includes(projectFilter)) {
           console.log(
-            `⏩ Skipping URL: ${targetUrl} (does not match project_filter "${projectFilter}")`
+            `⏭️ Skipping URL: ${targetUrl} (does not match project_filter "${projectFilter}")`
           );
           continue;
         }
@@ -263,8 +280,25 @@ const waitForDeploymentToStart = async ({
         return deployment;
       }
 
+      // Fallback: cache the last deployment matching actor + filter (even without status yet)
+      const fallbackDeployment = deployments.data.find((deployment) => {
+        const matchesActor = deployment.creator.login === actorName;
+        const matchesFilter =
+          !projectFilter ||
+          deployment.payload?.meta?.projectName?.includes(projectFilter) ||
+          false;
+        return matchesActor && matchesFilter;
+      });
+
+      if (fallbackDeployment) {
+        console.log(
+          `🕒 Caching fallback deployment ID: ${fallbackDeployment.id}`
+        );
+        lastMatchingDeployment = fallbackDeployment;
+      }
+
       console.log(
-        `Could not find any deployments for actor ${actorName}, retrying (attempt ${
+        `No matching deployments for actor ${actorName} and filter "${projectFilter}", retrying (attempt ${
           i + 1
         } / ${iterations})`
       );
@@ -274,16 +308,21 @@ const waitForDeploymentToStart = async ({
           i + 1
         } / ${iterations})`
       );
-
       console.error(e);
     }
 
     await wait(checkIntervalInMilliseconds);
   }
 
+  if (lastMatchingDeployment) {
+    console.log(
+      `⚠️ Timeout fallback — returning last matching deployment ID: ${lastMatchingDeployment.id}`
+    );
+    return lastMatchingDeployment;
+  }
+
   return null;
 };
-
 
 async function getShaForPullRequest({ octokit, owner, repo, number }) {
   const PR_NUMBER = github.context.payload.pull_request.number;

@@ -290,7 +290,6 @@ const waitForDeploymentToStart = async ({
         return deployment;
       }
 
-      // Fallback: cache the last deployment matching actor + filter (even without status yet)
       const fallbackDeployment = deployments.data.find((deployment) => {
         const matchesActor = deployment.creator.login === actorName;
         const matchesFilter =

@@ -23,6 +23,7 @@ const waitForUrl = async ({
   vercelPassword,
   protectionBypassHeader,
   path,
+  allowUnauthenticated,
 }) => {
   const iterations = calculateIterations(
     maxTimeout,
@@ -61,7 +62,12 @@ const waitForUrl = async ({
       return;
     } catch (e) {
       // https://axios-http.com/docs/handling_errors
-      if (e.response) {
+      if (e.response) {       
+        // If allowUnauthenticated is true and we get a 401, treat it as success
+        if (allowUnauthenticated && e.response.status === 401) {
+          console.log('Received 401 status code, treating as success due to allow_unauthenticated setting');
+          return;
+        }
         console.log(
           `GET status: ${e.response.status}. Attempt ${i} of ${iterations}`
         );
@@ -297,6 +303,7 @@ const run = async () => {
     const ENVIRONMENT = core.getInput('environment');
     const MAX_TIMEOUT = Number(core.getInput('max_timeout')) || 60;
     const ALLOW_INACTIVE = core.getBooleanInput('allow_inactive');
+    const ALLOW_UNAUTHENTICATED = core.getBooleanInput('allow_unauthenticated');
     const PATH = core.getInput('path') || '/';
     const CHECK_INTERVAL_IN_MS =
       (Number(core.getInput('check_interval')) || 2) * 1000;
@@ -383,6 +390,7 @@ const run = async () => {
       vercelPassword: VERCEL_PASSWORD,
       protectionBypassHeader: VERCEL_PROTECTION_BYPASS_HEADER,
       path: PATH,
+      allowUnauthenticated: ALLOW_UNAUTHENTICATED,
     });
   } catch (error) {
     core.setFailed(error.message);

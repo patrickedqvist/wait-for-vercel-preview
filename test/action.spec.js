@@ -404,6 +404,7 @@ describe('wait for vercel preview', () => {
         'https://my-preview.vercel.app/'
     );
   });
+
 });
 
 /**
@@ -412,6 +413,7 @@ describe('wait for vercel preview', () => {
  *  token?: string,
  *  vercel_password?: string;
  *  allow_inactive?: string;
+ *  allow_unauthenticated?: string;
  *  check_interval?: number;
  *  max_timeout?: number;
  *  path?: string;
@@ -442,6 +444,8 @@ function setInputs(inputs = {}) {
     switch (key) {
       case 'allow_inactive':
         return String(inputs.allow_inactive).toLowerCase() === 'true';
+      case 'allow_unauthenticated':
+        return String(inputs.allow_unauthenticated).toLowerCase() === 'true';
       default:
         return false;
     }

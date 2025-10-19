@@ -31,6 +31,10 @@ inputs:
     description: 'The path to check. Defaults to the index of the domain'
     default: '/'
     required: false
+  allow_unauthenticated:
+    description: 'Allow unauthenticated access (401 errors) to be treated as success. Useful when deployment is complete but authentication is not configured.'
+    default: 'false'
+    required: false
 
 outputs:
   url:

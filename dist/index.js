@@ -42142,6 +42142,22 @@ var set_cookie = __nccwpck_require__(146);
 
 
 /**
+ * Default configuration values
+ */
+const DEFAULTS = {
+	/** Maximum timeout in seconds for waiting on deployment */
+	MAX_TIMEOUT: 60,
+	/** Check interval in seconds */
+	CHECK_INTERVAL: 2,
+	/** Maximum timeout in seconds for waiting on deployment to start */
+	DEPLOYMENT_START_TIMEOUT: 20,
+	/** Check interval in milliseconds for deployment start */
+	DEPLOYMENT_START_INTERVAL: 2000,
+	/** Actor name for Vercel deployments */
+	ACTOR_NAME: 'vercel[bot]',
+};
+
+/**
  * Calculate the number of iterations based on timeout and interval
  * @param {number} maxTimeoutSec - Maximum timeout in seconds
  * @param {number} checkIntervalInMilliseconds - Check interval in milliseconds
@@ -42371,9 +42387,9 @@ const waitForDeploymentToStart = async ({
 	repo,
 	sha,
 	environment,
-	actorName = 'vercel[bot]',
-	maxTimeout = 20,
-	checkIntervalInMilliseconds = 2000,
+	actorName = DEFAULTS.ACTOR_NAME,
+	maxTimeout = DEFAULTS.DEPLOYMENT_START_TIMEOUT,
+	checkIntervalInMilliseconds = DEFAULTS.DEPLOYMENT_START_INTERVAL,
 }) => {
 	const iterations = calculateIterations(maxTimeout, checkIntervalInMilliseconds);
 
@@ -42454,10 +42470,10 @@ const run = async () => {
 		const VERCEL_PASSWORD = core.getInput('vercel_password');
 		const VERCEL_PROTECTION_BYPASS_HEADER = core.getInput('vercel_protection_bypass_header');
 		const ENVIRONMENT = core.getInput('environment');
-		const MAX_TIMEOUT = Number(core.getInput('max_timeout')) || 60;
+		const MAX_TIMEOUT = Number(core.getInput('max_timeout')) || DEFAULTS.MAX_TIMEOUT;
 		const ALLOW_INACTIVE = core.getBooleanInput('allow_inactive');
 		const PATH = core.getInput('path') || '/';
-		const CHECK_INTERVAL_IN_MS = (Number(core.getInput('check_interval')) || 2) * 1000;
+		const CHECK_INTERVAL_IN_MS = (Number(core.getInput('check_interval')) || DEFAULTS.CHECK_INTERVAL) * 1000;
 
 		// Fail if we have don't have a github token
 		if (!GITHUB_TOKEN) {
@@ -42497,7 +42513,7 @@ const run = async () => {
 			repo,
 			sha: sha,
 			environment: ENVIRONMENT,
-			actorName: 'vercel[bot]',
+			actorName: DEFAULTS.ACTOR_NAME,
 			maxTimeout: MAX_TIMEOUT,
 			checkIntervalInMilliseconds: CHECK_INTERVAL_IN_MS,
 		});

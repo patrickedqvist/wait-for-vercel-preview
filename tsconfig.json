@@ -1,0 +1,11 @@
+{
+  "exclude": ["node_modules"],
+  "include": ["src/**/*.ts", "__tests__/**/*.ts"],
+  "compilerOptions": {
+    "target": "es2015",
+    "module": "node16",
+    "moduleResolution": "node16",
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true
+  }
+}

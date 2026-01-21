@@ -65,6 +65,16 @@ steps:
   - run: echo ${{steps.waitFor200.outputs.url}}
 ```
 
+## Debugging
+
+This action uses GitHub Actions' built-in debug logging. To see detailed debug output (retry attempts, HTTP status codes, etc.), enable step debug logging by setting the following secret or variable in your repository:
+
+```
+ACTIONS_STEP_DEBUG=true
+```
+
+See [GitHub's documentation on debug logging](https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/troubleshooting-workflows/enabling-debug-logging) for more information.
+
 ## Building
 
 The Action is bundled via [ncc](https://github.com/vercel/ncc). See [this discussion](https://github.com/actions/hello-world-javascript-action/issues/12) for more information.
@@ -76,7 +86,7 @@ npm run build
 
 ## Tests
 
-Unit tests with [Jest](https://jestjs.io/) and [Mock Service Worker](https://mswjs.io/)
+Unit tests with [Vitest](https://vitest.dev/) and [Mock Service Worker](https://mswjs.io/)
 
 ```
 npm test

@@ -42210,17 +42210,17 @@ const waitForUrl = async ({
 			await lib_axios.get(checkUri.toString(), {
 				headers,
 			});
-			console.log('Received success status code');
+			core.info('Received success status code');
 			return;
 		} catch (e) {
 			// https://axios-http.com/docs/handling_errors
 			if (e.response) {
-				console.log(`GET status: ${e.response.status}. Attempt ${i} of ${iterations}`);
+				core.debug(`GET status: ${e.response.status}. Attempt ${i} of ${iterations}`);
 			} else if (e.request) {
-				console.log(`GET error. A request was made, but no response was received. Attempt ${i} of ${iterations}`);
-				console.log(e.message);
+				core.debug(`GET error. A request was made, but no response was received. Attempt ${i} of ${iterations}`);
+				core.debug(e.message);
 			} else {
-				console.log(e);
+				core.debug(e);
 			}
 
 			await wait(checkIntervalInMilliseconds);
@@ -42236,7 +42236,7 @@ const waitForUrl = async ({
  * @returns {Promise<string>}
  */
 const getPassword = async ({ url, vercelPassword }) => {
-	console.log('requesting vercel JWT');
+	core.debug('requesting vercel JWT');
 
 	const data = new URLSearchParams();
 	data.append('_vercel_password', vercelPassword);
@@ -42269,7 +42269,7 @@ const getPassword = async ({ url, vercelPassword }) => {
 		throw new Error('no vercel JWT in response');
 	}
 
-	console.log('received vercel JWT');
+	core.debug('received vercel JWT');
 
 	return vercelJwtCookie.value;
 };
@@ -42333,13 +42333,13 @@ const waitForStatus = async ({
 
 			throw new StatusError('Unknown status error');
 		} catch (e) {
-			console.log(`Deployment unavailable or not successful, retrying (attempt ${i + 1} / ${iterations})`);
+			core.debug(`Deployment unavailable or not successful, retrying (attempt ${i + 1} / ${iterations})`);
 			if (e instanceof StatusError) {
 				if (!e.message.includes('No status with state "success"')) {
-					console.log(e.message);
+					core.debug(e.message);
 				}
 			} else {
-				console.log(e);
+				core.debug(e);
 			}
 			await wait(checkIntervalInMilliseconds);
 		}
@@ -42396,11 +42396,11 @@ const waitForDeploymentToStart = async ({
 				return deployment;
 			}
 
-			console.log(`Could not find any deployments for actor ${actorName}, retrying (attempt ${i + 1} / ${iterations})`);
+			core.debug(`Could not find any deployments for actor ${actorName}, retrying (attempt ${i + 1} / ${iterations})`);
 		} catch (e) {
-			console.log(`Error while fetching deployments, retrying (attempt ${i + 1} / ${iterations})`);
+			core.warning(`Error while fetching deployments, retrying (attempt ${i + 1} / ${iterations})`);
 
-			console.error(e);
+			core.debug(e);
 		}
 
 		await wait(checkIntervalInMilliseconds);
@@ -42525,13 +42525,13 @@ const run = async () => {
 			return;
 		}
 
-		console.log('target url »', targetUrl);
+		core.info(`target url » ${targetUrl}`);
 
 		// Set output
 		core.setOutput('url', targetUrl);
 
 		// Wait for url to respond with a success
-		console.log(`Waiting for a status code 200 from: ${targetUrl}`);
+		core.info(`Waiting for a status code 200 from: ${targetUrl}`);
 
 		await waitForUrl({
 			url: targetUrl,

@@ -8,6 +8,9 @@ const mockGetInput = vi.fn();
 const mockGetBooleanInput = vi.fn();
 const mockSetFailed = vi.fn();
 const mockSetOutput = vi.fn();
+const mockInfo = vi.fn();
+const mockDebug = vi.fn();
+const mockWarning = vi.fn();
 
 // Create a mutable context object
 const mockContext = {
@@ -46,6 +49,9 @@ vi.mock('@actions/core', () => ({
 	getBooleanInput: mockGetBooleanInput,
 	setFailed: mockSetFailed,
 	setOutput: mockSetOutput,
+	info: mockInfo,
+	debug: mockDebug,
+	warning: mockWarning,
 }));
 
 // Mock @actions/github - we need to provide a mock getOctokit that uses fetch (interceptable by MSW)

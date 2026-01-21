@@ -325,6 +325,7 @@ export const run = async () => {
 		// Fail if we have don't have a github token
 		if (!GITHUB_TOKEN) {
 			core.setFailed('Required field `token` was not provided');
+			return;
 		}
 
 		const octokit = github.getOctokit(GITHUB_TOKEN);

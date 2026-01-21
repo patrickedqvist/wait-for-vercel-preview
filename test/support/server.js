@@ -1,7 +1,7 @@
-const { setupServer } = require('msw/node');
-const { rest } = require('msw');
+import { HttpResponse, http } from 'msw';
+import { setupServer } from 'msw/node';
 
 // This configures a request mocking server with the given request handlers.
-exports.server = setupServer();
+export const server = setupServer();
 
-exports.rest = rest;
+export { http, HttpResponse };

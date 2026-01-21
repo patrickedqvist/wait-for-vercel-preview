@@ -1,409 +1,427 @@
 /// @ts-check
 
-const { run } = require('../action');
-const core = require('@actions/core');
-const github = require('@actions/github');
-const { server, rest } = require('./support/server');
-const deepmerge = require('deepmerge');
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { HttpResponse, http, server } from './support/server.js';
 
-jest.setTimeout(20000);
+// Create mock functions
+const mockGetInput = vi.fn();
+const mockGetBooleanInput = vi.fn();
+const mockSetFailed = vi.fn();
+const mockSetOutput = vi.fn();
 
-jest.mock('@actions/core', () => {
-  return {
-    getInput: jest.fn(),
-    getBooleanInput: jest.fn(),
-    setFailed: jest.fn(),
-    setOutput: jest.fn(),
-  };
+// Create a mutable context object
+const mockContext = {
+	owner: 'test-owner',
+	payload: {
+		pull_request: {
+			number: 99,
+		},
+	},
+	sha: '',
+	eventName: '',
+	ref: '',
+	workflow: '',
+	action: '',
+	actor: '',
+	job: '',
+	runId: 123,
+	runNumber: 123,
+	apiUrl: '',
+	serverUrl: '',
+	graphqlUrl: '',
+	issue: {
+		owner: 'gh-user',
+		repo: 'best-repo-ever',
+		number: 345,
+	},
+	repo: {
+		owner: 'gh-user',
+		repo: 'best-repo-ever',
+	},
+};
+
+// Mock @actions/core
+vi.mock('@actions/core', () => ({
+	getInput: mockGetInput,
+	getBooleanInput: mockGetBooleanInput,
+	setFailed: mockSetFailed,
+	setOutput: mockSetOutput,
+}));
+
+// Mock @actions/github - we need to provide a mock getOctokit that uses fetch (interceptable by MSW)
+vi.mock('@actions/github', async (importOriginal) => {
+	const original = await importOriginal();
+	return {
+		getOctokit: (token) => {
+			// Use the real getOctokit but ensure requests go through MSW
+			return original.getOctokit(token, {
+				request: {
+					fetch: globalThis.fetch,
+				},
+			});
+		},
+		context: mockContext,
+	};
 });
 
-jest.mock('@actions/github', () => {
-  const original = jest.requireActual('@actions/github');
+// Import after mocks are set up
+const { run } = await import('../action.js');
 
-  return {
-    getOctokit: original.getOctokit,
-    context: {
-      owner: 'test-owner',
-      repo: 'test-repo',
-      payload: {
-        pull_request: {
-          number: 99,
-        },
-      },
-    },
-  };
+beforeEach(() => {
+	// Reset context to defaults before each test
+	mockContext.owner = 'test-owner';
+	mockContext.repo = 'test-repo';
+	mockContext.payload = { pull_request: { number: 99 } };
+	mockContext.sha = '';
+	mockContext.eventName = '';
+	mockContext.ref = '';
+	mockContext.workflow = '';
+	mockContext.action = '';
+	mockContext.actor = '';
+	mockContext.job = '';
+	mockContext.runId = 123;
+	mockContext.runNumber = 123;
+	mockContext.apiUrl = '';
+	mockContext.serverUrl = '';
+	mockContext.graphqlUrl = '';
+	mockContext.issue = { owner: 'gh-user', repo: 'best-repo-ever', number: 345 };
+	mockContext.repo = { owner: 'gh-user', repo: 'best-repo-ever' };
 });
 
 afterEach(() => {
-  jest.resetAllMocks();
+	vi.resetAllMocks();
 });
 
 describe('wait for vercel preview', () => {
-  describe('environment setup', () => {
-    test('exits if the token is not provided', async () => {
-      setInputs({
-        token: '',
-      });
+	describe('environment setup', () => {
+		test('exits if the token is not provided', async () => {
+			setInputs({
+				token: '',
+			});
 
-      await run();
+			await run();
 
-      expect(core.setFailed).toBeCalledWith(
-        'Required field `token` was not provided'
-      );
-    });
+			expect(mockSetFailed).toBeCalledWith('Required field `token` was not provided');
+		});
 
-    test('exits if there is no PR number', async () => {
-      setInputs({
-        token: 'a-token',
-      });
+		test('exits if there is no PR number', async () => {
+			setInputs({
+				token: 'a-token',
+			});
 
-      setGithubContext({
-        payload: {
-          pull_request: {
-            number: undefined,
-          },
-        },
-      });
+			setGithubContext({
+				payload: {
+					pull_request: {
+						number: undefined,
+					},
+				},
+			});
 
-      await run();
+			await run();
 
-      expect(core.setFailed).toHaveBeenCalledWith(
-        'No pull request number was found'
-      );
-    });
+			expect(mockSetFailed).toHaveBeenCalledWith('No pull request number was found');
+		});
 
-    test('exits if there is no info about the PR', async () => {
-      setInputs({
-        token: 'a-token',
-      });
-      setGithubContext({
-        payload: {
-          pull_request: {
-            number: 99,
-          },
-        },
-      });
-      ghResponse('/repos/gh-user/best-repo-ever/pulls/99', 303, {});
+		test('exits if there is no info about the PR', async () => {
+			setInputs({
+				token: 'a-token',
+			});
+			setGithubContext({
+				payload: {
+					pull_request: {
+						number: 99,
+					},
+				},
+			});
+			ghResponse('/repos/gh-user/best-repo-ever/pulls/99', 404, {
+				message: 'Not Found',
+			});
 
-      await run();
+			await run();
 
-      expect(core.setFailed).toHaveBeenCalledWith(
-        'Could not get information about the current pull request'
-      );
-    });
+			expect(mockSetFailed).toHaveBeenCalledWith('Not Found');
+		});
 
-    test('exits if there is no Vercel deployment status found', async () => {
-      setInputs({
-        token: 'a-token',
-        max_timeout: 5,
-        check_interval: 1,
-      });
-      setGithubContext({
-        payload: {
-          pull_request: {
-            number: 99,
-          },
-        },
-      });
-      ghResponse('/repos/gh-user/best-repo-ever/pulls/99', 200, {
-        head: {
-          sha: 'abcdef12345678',
-        },
-      });
+		test('exits if there is no Vercel deployment status found', async () => {
+			setInputs({
+				token: 'a-token',
+				max_timeout: 5,
+				check_interval: 1,
+			});
+			setGithubContext({
+				payload: {
+					pull_request: {
+						number: 99,
+					},
+				},
+			});
+			ghResponse('/repos/gh-user/best-repo-ever/pulls/99', 200, {
+				head: {
+					sha: 'abcdef12345678',
+				},
+			});
 
-      ghResponse('/repos/gh-user/best-repo-ever/deployments', 303, {});
+			ghResponse('/repos/gh-user/best-repo-ever/deployments', 303, {});
 
-      await run();
+			await run();
 
-      expect(core.setFailed).toHaveBeenCalledWith(
-        'no vercel deployment found, exiting...'
-      );
-    });
-  });
+			expect(mockSetFailed).toHaveBeenCalledWith('no vercel deployment found, exiting...');
+		});
+	});
 
-  test('resolves the output URL from the vercel deployment', async () => {
-    setInputs({
-      token: 'a-token',
-      check_interval: 1,
-      max_timeout: 10,
-    });
+	test('resolves the output URL from the vercel deployment', async () => {
+		setInputs({
+			token: 'a-token',
+			check_interval: 1,
+			max_timeout: 10,
+		});
 
-    givenValidGithubResponses();
+		givenValidGithubResponses();
 
-    // Simulate deployment race-condition
-    restTimes(
-      'https://api.github.com/repos/gh-user/best-repo-ever/deployments',
-      [
-        {
-          status: 200,
-          body: [
-            {
-              id: 'a1a1a1',
-              creator: {
-                login: 'a-user',
-              },
-            },
-          ],
-          times: 2,
-        },
-        {
-          status: 200,
-          body: [
-            {
-              id: 'a1a1a1',
-              creator: {
-                login: 'a-user',
-              },
-            },
-            {
-              id: 'b2b2b2',
-              creator: {
-                login: 'vercel[bot]',
-              },
-            },
-          ],
-          times: 1,
-        },
-      ]
-    );
+		// Simulate deployment race-condition
+		httpTimes('https://api.github.com/repos/gh-user/best-repo-ever/deployments', [
+			{
+				status: 200,
+				body: [
+					{
+						id: 'a1a1a1',
+						creator: {
+							login: 'a-user',
+						},
+					},
+				],
+				times: 2,
+			},
+			{
+				status: 200,
+				body: [
+					{
+						id: 'a1a1a1',
+						creator: {
+							login: 'a-user',
+						},
+					},
+					{
+						id: 'b2b2b2',
+						creator: {
+							login: 'vercel[bot]',
+						},
+					},
+				],
+				times: 1,
+			},
+		]);
 
-    restTimes('https://my-preview.vercel.app/', [
-      {
-        status: 404,
-        body: '',
-        times: 3,
-      },
-      {
-        status: 200,
-        body: '',
-        times: 1,
-      },
-    ]);
+		httpTimes('https://my-preview.vercel.app/', [
+			{
+				status: 404,
+				body: '',
+				times: 3,
+			},
+			{
+				status: 200,
+				body: '',
+				times: 1,
+			},
+		]);
 
-    await run();
+		await run();
 
-    expect(core.setFailed).not.toBeCalled();
-    expect(core.setOutput).toBeCalledWith(
-      'url',
-      'https://my-preview.vercel.app/'
-    );
-  });
+		expect(mockSetFailed).not.toBeCalled();
+		expect(mockSetOutput).toBeCalledWith('url', 'https://my-preview.vercel.app/');
+	});
 
-  test('can find the sha from the github context', async () => {
-    setInputs({
-      token: 'a-token',
-      check_interval: 1,
-      max_timeout: 10,
-    });
+	test('can find the sha from the github context', async () => {
+		setInputs({
+			token: 'a-token',
+			check_interval: 1,
+			max_timeout: 10,
+		});
 
-    setGithubContext({
-      sha: 'abcdef12345678',
-    });
+		setGithubContext({
+			sha: 'abcdef12345678',
+		});
 
-    givenValidGithubResponses();
+		givenValidGithubResponses();
 
-    restTimes('https://my-preview.vercel.app', [
-      {
-        status: 200,
-        body: 'ok!',
-        times: 1,
-      },
-    ]);
+		httpTimes('https://my-preview.vercel.app', [
+			{
+				status: 200,
+				body: 'ok!',
+				times: 1,
+			},
+		]);
 
-    await run();
+		await run();
 
-    expect(core.setFailed).not.toBeCalled();
-    expect(core.setOutput).toBeCalledWith(
-      'url',
-      'https://my-preview.vercel.app/'
-    );
-  });
+		expect(mockSetFailed).not.toBeCalled();
+		expect(mockSetOutput).toBeCalledWith('url', 'https://my-preview.vercel.app/');
+	});
 
-  test('can wait for a specific path', async () => {
-    setInputs({
-      token: 'a-token',
-      check_interval: 1,
-      max_timeout: 10,
-      path: '/wp-admin.php',
-    });
+	test('can wait for a specific path', async () => {
+		setInputs({
+			token: 'a-token',
+			check_interval: 1,
+			max_timeout: 10,
+			path: '/wp-admin.php',
+		});
 
-    givenValidGithubResponses();
+		givenValidGithubResponses();
 
-    restTimes('https://my-preview.vercel.app/wp-admin.php', [
-      {
-        status: 404,
-        body: 'not found',
-        times: 2,
-      },
-      {
-        status: 200,
-        body: 'custom path!',
-        times: 1,
-      },
-    ]);
+		httpTimes('https://my-preview.vercel.app/wp-admin.php', [
+			{
+				status: 404,
+				body: 'not found',
+				times: 2,
+			},
+			{
+				status: 200,
+				body: 'custom path!',
+				times: 1,
+			},
+		]);
 
-    await run();
+		await run();
 
-    expect(core.setFailed).not.toBeCalled();
-    expect(core.setOutput).toBeCalledWith(
-      'url',
-      'https://my-preview.vercel.app/'
-    );
-  });
+		expect(mockSetFailed).not.toBeCalled();
+		expect(mockSetOutput).toBeCalledWith('url', 'https://my-preview.vercel.app/');
+	});
 
-  test('authenticates with the provided vercel_password', async () => {
-    setInputs({
-      token: 'a-token',
-      vercel_password: 'top-secret',
-      check_interval: 1,
-    });
+	test('authenticates with the provided vercel_password', async () => {
+		setInputs({
+			token: 'a-token',
+			vercel_password: 'top-secret',
+			check_interval: 1,
+		});
 
-    givenValidGithubResponses();
+		givenValidGithubResponses();
 
-    restTimes('https://my-preview.vercel.app/', [
-      {
-        status: 404,
-        body: '',
-        times: 2,
-      },
-      {
-        status: 200,
-        body: '',
-        times: 1,
-      },
-    ]);
+		httpTimes('https://my-preview.vercel.app/', [
+			{
+				status: 404,
+				body: '',
+				times: 2,
+			},
+			{
+				status: 200,
+				body: '',
+				times: 1,
+			},
+		]);
 
-    server.use(
-      rest.post('https://my-preview.vercel.app/', (req, res, ctx) => {
-        return res(
-          ctx.status(303),
-          ctx.cookie('_vercel_jwt', 'a-super-secret-jwt'),
-          ctx.body('')
-        );
-      })
-    );
+		server.use(
+			http.post('https://my-preview.vercel.app/', () => {
+				return new HttpResponse('', {
+					status: 303,
+					headers: {
+						'Set-Cookie': '_vercel_jwt=a-super-secret-jwt; Path=/; HttpOnly',
+					},
+				});
+			})
+		);
 
-    await run();
+		await run();
 
-    expect(core.setFailed).not.toBeCalled();
-    expect(core.setOutput).toHaveBeenCalledWith(
-      'url',
-      'https://my-preview.vercel.app/'
-    );
-    expect(core.setOutput).toHaveBeenCalledWith(
-      'vercel_jwt',
-      'a-super-secret-jwt'
-    );
-  });
+		expect(mockSetFailed).not.toBeCalled();
+		expect(mockSetOutput).toHaveBeenCalledWith('url', 'https://my-preview.vercel.app/');
+		expect(mockSetOutput).toHaveBeenCalledWith('vercel_jwt', 'a-super-secret-jwt');
+	});
 
-  test('fails if allow_inactive is set to false but the only status is inactive', async () => {
-    setInputs({
-      token: 'a-token',
-      allow_inactive: 'false',
-      max_timeout: 5,
-      check_interval: 1,
-    });
+	test('fails if allow_inactive is set to false but the only status is inactive', async () => {
+		setInputs({
+			token: 'a-token',
+			allow_inactive: 'false',
+			max_timeout: 5,
+			check_interval: 1,
+		});
 
-    setGithubContext({
-      payload: {
-        pull_request: {
-          number: 99,
-        },
-      },
-    });
+		setGithubContext({
+			payload: {
+				pull_request: {
+					number: 99,
+				},
+			},
+		});
 
-    ghResponse('/repos/gh-user/best-repo-ever/pulls/99', 200, {
-      head: {
-        sha: 'abcdef12345678',
-      },
-    });
+		ghResponse('/repos/gh-user/best-repo-ever/pulls/99', 200, {
+			head: {
+				sha: 'abcdef12345678',
+			},
+		});
 
-    ghResponse('/repos/gh-user/best-repo-ever/deployments', 200, [
-      {
-        id: 'fake-deployment-id',
-        creator: {
-          login: 'vercel[bot]',
-        },
-      },
-    ]);
+		ghResponse('/repos/gh-user/best-repo-ever/deployments', 200, [
+			{
+				id: 'fake-deployment-id',
+				creator: {
+					login: 'vercel[bot]',
+				},
+			},
+		]);
 
-    ghResponse(
-        '/repos/gh-user/best-repo-ever/deployments/fake-deployment-id/statuses',
-        200,
-        [
-          {
-            state: 'inactive',
-            target_url: 'https://my-preview.vercel.app/',
-          },
-        ]
-    );
+		ghResponse('/repos/gh-user/best-repo-ever/deployments/fake-deployment-id/statuses', 200, [
+			{
+				state: 'inactive',
+				target_url: 'https://my-preview.vercel.app/',
+			},
+		]);
 
-    await run();
+		await run();
 
-    expect(core.setFailed).toHaveBeenCalledWith(
-        'Timeout reached: Unable to wait for an deployment to be successful'
-    );
-  });
+		expect(mockSetFailed).toHaveBeenCalledWith('Timeout reached: Unable to wait for an deployment to be successful');
+	});
 
-  test('succeeds if allow_inactive is set to true and the only status is inactive', async () => {
-    setInputs({
-      token: 'a-token',
-      allow_inactive: 'true',
-      max_timeout: 5,
-      check_interval: 1,
-    });
+	test('succeeds if allow_inactive is set to true and the only status is inactive', async () => {
+		setInputs({
+			token: 'a-token',
+			allow_inactive: 'true',
+			max_timeout: 5,
+			check_interval: 1,
+		});
 
-    setGithubContext({
-      payload: {
-        pull_request: {
-          number: 99,
-        },
-      },
-    });
+		setGithubContext({
+			payload: {
+				pull_request: {
+					number: 99,
+				},
+			},
+		});
 
-    ghResponse('/repos/gh-user/best-repo-ever/pulls/99', 200, {
-      head: {
-        sha: 'abcdef12345678',
-      },
-    });
+		ghResponse('/repos/gh-user/best-repo-ever/pulls/99', 200, {
+			head: {
+				sha: 'abcdef12345678',
+			},
+		});
 
-    ghResponse('/repos/gh-user/best-repo-ever/deployments', 200, [
-      {
-        id: 'fake-deployment-id',
-        creator: {
-          login: 'vercel[bot]',
-        },
-      },
-    ]);
+		ghResponse('/repos/gh-user/best-repo-ever/deployments', 200, [
+			{
+				id: 'fake-deployment-id',
+				creator: {
+					login: 'vercel[bot]',
+				},
+			},
+		]);
 
-    ghResponse(
-        '/repos/gh-user/best-repo-ever/deployments/fake-deployment-id/statuses',
-        200,
-        [
-          {
-            state: 'inactive',
-            target_url: 'https://my-preview.vercel.app/',
-          },
-        ]
-    );
+		ghResponse('/repos/gh-user/best-repo-ever/deployments/fake-deployment-id/statuses', 200, [
+			{
+				state: 'inactive',
+				target_url: 'https://my-preview.vercel.app/',
+			},
+		]);
 
-    restTimes('https://my-preview.vercel.app/', [
-      {
-        status: 200,
-        body: 'OK!',
-        times: 1,
-      },
-    ]);
+		httpTimes('https://my-preview.vercel.app/', [
+			{
+				status: 200,
+				body: 'OK!',
+				times: 1,
+			},
+		]);
 
-    await run();
+		await run();
 
-    expect(core.setFailed).not.toHaveBeenCalled();
+		expect(mockSetFailed).not.toHaveBeenCalled();
 
-    expect(core.setOutput).toHaveBeenCalledWith(
-        'url',
-        'https://my-preview.vercel.app/'
-    );
-  });
+		expect(mockSetOutput).toHaveBeenCalledWith('url', 'https://my-preview.vercel.app/');
+	});
 });
 
 /**
@@ -418,165 +436,142 @@ describe('wait for vercel preview', () => {
  *  }} inputs
  */
 function setInputs(inputs = {}) {
-  const spyGetInput = jest.spyOn(core, 'getInput');
-  const spyGetBooleanInput = jest.spyOn(core, 'getBooleanInput');
+	mockGetInput.mockImplementation((key) => {
+		switch (key) {
+			case 'token':
+				return inputs.token || '';
+			case 'vercel_password':
+				return inputs.vercel_password || '';
+			case 'check_interval':
+				return `${inputs.check_interval || ''}`;
+			case 'max_timeout':
+				return `${inputs.max_timeout || ''}`;
+			case 'path':
+				return `${inputs.path || ''}`;
+			default:
+				return '';
+		}
+	});
 
-  spyGetInput.mockImplementation((key) => {
-    switch (key) {
-      case 'token':
-        return inputs.token || '';
-      case 'vercel_password':
-        return inputs.vercel_password || '';
-      case 'check_interval':
-        return `${inputs.check_interval || ''}`;
-      case 'max_timeout':
-        return `${inputs.max_timeout || ''}`;
-      case 'path':
-        return `${inputs.path || ''}`;
-      default:
-        return '';
-    }
-  });
-
-  spyGetBooleanInput.mockImplementation((key) => {
-    switch (key) {
-      case 'allow_inactive':
-        return String(inputs.allow_inactive).toLowerCase() === 'true';
-      default:
-        return false;
-    }
-  });
+	mockGetBooleanInput.mockImplementation((key) => {
+		switch (key) {
+			case 'allow_inactive':
+				return String(inputs.allow_inactive).toLowerCase() === 'true';
+			default:
+				return false;
+		}
+	});
 }
 
 function setGithubContext(ctx) {
-  const defaultCtx = {
-    eventName: '',
-    sha: '',
-    ref: '',
-    workflow: '',
-    action: '',
-    actor: '',
-    job: '',
-    runId: 123,
-    runNumber: 123,
-    apiUrl: '',
-    serverUrl: '',
-    graphqlUrl: '',
-    issue: {
-      owner: 'gh-user',
-      repo: 'best-repo-ever',
-      number: 345,
-    },
-    repo: {
-      owner: 'gh-user',
-      repo: 'best-repo-ever',
-    },
-    payload: {
-      pull_request: {
-        number: undefined,
-      },
-    },
-  };
+	Object.assign(mockContext, deepMerge(mockContext, ctx));
+}
 
-  // ts-check complains about assigning to a read-only property
-  // @ts-ignore
-  github.context = deepmerge(defaultCtx, ctx);
+function deepMerge(target, source) {
+	const result = { ...target };
+	for (const key of Object.keys(source)) {
+		if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+			result[key] = deepMerge(target[key] || {}, source[key]);
+		} else {
+			result[key] = source[key];
+		}
+	}
+	return result;
 }
 
 function ghResponse(uri, status, data) {
-  server.use(
-    rest.get(`https://api.github.com${uri}`, (req, res, ctx) => {
-      return res(ctx.status(status), ctx.json(data));
-    })
-  );
+	server.use(
+		http.get(`https://api.github.com${uri}`, () => {
+			return HttpResponse.json(data, { status });
+		})
+	);
 }
 
 function ghRespondOnce(uri, status, data) {
-  return restOnce(`https://api.github.com${uri}`, status, data);
+	server.use(
+		http.get(
+			`https://api.github.com${uri}`,
+			() => {
+				return HttpResponse.json(data, { status });
+			},
+			{ once: true }
+		)
+	);
 }
 
-function restOnce(uri, status, data) {
-  server.use(
-    rest.get(uri, (req, res, ctx) => {
-      return res.once(ctx.status(status), ctx.json(data));
-    })
-  );
-}
+function httpTimes(uri, payloads) {
+	let count = 0;
+	let cursor = 0;
 
-function restTimes(uri, payloads) {
-  let count = 0;
-  let cursor = 0;
+	server.use(
+		http.get(uri, () => {
+			let payload = payloads[cursor];
 
-  server.use(
-    rest.get(uri, (req, res, ctx) => {
-      let payload = payloads[cursor];
+			if (count < payload.times) {
+				count = count + 1;
 
-      if (count < payload.times) {
-        count = count + 1;
+				if (typeof payload.body === 'string') {
+					return new HttpResponse(payload.body, { status: payload.status });
+				}
 
-        if (typeof payload.body === 'string') {
-          return res(ctx.status(payload.status), ctx.body(payload.body));
-        }
+				return HttpResponse.json(payload.body, { status: payload.status });
+			}
 
-        return res(ctx.status(payload.status), ctx.json(payload.body));
-      }
+			cursor = cursor + 1;
+			count = 1;
+			payload = payloads[cursor];
 
-      cursor = cursor + 1;
-      count = 1;
-      payload = payloads[cursor];
+			if (typeof payload.body === 'string') {
+				return new HttpResponse(payload.body, { status: payload.status });
+			}
 
-      if (typeof payload.body === 'string') {
-        return res(ctx.status(payload.status), ctx.body(payload.body));
-      }
-
-      return res(ctx.status(payload.status), ctx.json(payload.body));
-    })
-  );
+			return HttpResponse.json(payload.body, { status: payload.status });
+		})
+	);
 }
 
 function givenValidGithubResponses() {
-  setGithubContext({
-    payload: {
-      pull_request: {
-        number: 99,
-      },
-    },
-  });
+	setGithubContext({
+		payload: {
+			pull_request: {
+				number: 99,
+			},
+		},
+	});
 
-  ghResponse('/repos/gh-user/best-repo-ever/pulls/99', 200, {
-    head: {
-      sha: 'abcdef12345678',
-    },
-  });
+	ghResponse('/repos/gh-user/best-repo-ever/pulls/99', 200, {
+		head: {
+			sha: 'abcdef12345678',
+		},
+	});
 
-  ghResponse('/repos/gh-user/best-repo-ever/deployments', 200, [
-    {
-      id: 'a1a1a1',
-      creator: {
-        login: 'a-user',
-      },
-    },
-    {
-      id: 'b2b2b2',
-      creator: {
-        login: 'vercel[bot]',
-      },
-    },
-  ]);
+	ghResponse('/repos/gh-user/best-repo-ever/deployments', 200, [
+		{
+			id: 'a1a1a1',
+			creator: {
+				login: 'a-user',
+			},
+		},
+		{
+			id: 'b2b2b2',
+			creator: {
+				login: 'vercel[bot]',
+			},
+		},
+	]);
 
-  const statusEndpoint =
-    '/repos/gh-user/best-repo-ever/deployments/b2b2b2/statuses';
+	const statusEndpoint = '/repos/gh-user/best-repo-ever/deployments/b2b2b2/statuses';
 
-  ghRespondOnce(statusEndpoint, 200, [
-    {
-      state: 'in-progress',
-    },
-  ]);
+	ghRespondOnce(statusEndpoint, 200, [
+		{
+			state: 'in-progress',
+		},
+	]);
 
-  ghRespondOnce(statusEndpoint, 200, [
-    {
-      state: 'success',
-      target_url: 'https://my-preview.vercel.app/',
-    },
-  ]);
+	ghRespondOnce(statusEndpoint, 200, [
+		{
+			state: 'success',
+			target_url: 'https://my-preview.vercel.app/',
+		},
+	]);
 }

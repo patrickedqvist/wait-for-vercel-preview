@@ -9,25 +9,23 @@ on:
       - main
 
 jobs:
-  pr:
+  test:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
 
-      - name: npm-cache
-        uses: actions/cache@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ env.cache-name }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-${{ env.cache-name }}
-            ${{ runner.os }}-node
+          node-version: "20"
+          cache: "npm"
 
-      - name: install
+      - name: Install dependencies
         run: npm ci
 
-      - name: test
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
         run: npm run test:ci:coverage

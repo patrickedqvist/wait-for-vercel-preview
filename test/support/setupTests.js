@@ -1,4 +1,5 @@
-const { server } = require('./server.js');
+import { afterAll, afterEach, beforeAll } from 'vitest';
+import { server } from './server.js';
 
 // Establish API mocking before all tests.
 beforeAll(() => server.listen());

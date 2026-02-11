@@ -33,7 +33,7 @@
 		"@actions/core": "^1.11.1",
 		"@actions/github": "^6.0.0",
 		"@vercel/ncc": "^0.38.4",
-		"axios": "^1.13.2",
+		"axios": "^1.13.5",
 		"set-cookie-parser": "^2.7.2"
 	},
 	"devDependencies": {

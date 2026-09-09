@@ -40,6 +40,6 @@
 		"@biomejs/biome": "^2.3.11",
 		"@vitest/coverage-v8": "^4.1.8",
 		"msw": "^2.12.7",
-		"vitest": "^4.1.8"
+		"vitest": "^4.1.11"
 	}
 }
